@@ -28,36 +28,5 @@
     // The idea is to capture the statistics below
 
 
-    private void PrintStats(String movie, String csuite, String ks,
-			    int ksize, String hic,
-			    int nf, int afs, int ms, int etm,
-			    int frate, int tput)
-    {
 
-    System.out.println("---------------------------------------------");
-    System.out.println("Streaming Server observed Indicators and Statistics");
-    System.out.println("---------------------------------------------");
-    System.out.println("Streamed Movie and used Cryptographic Configs");
-    System.out.println("---------------------------------------------");
-    System.out.println("Movie (streamed):" +movie );
-    System.out.println("Used ciphersuite ALG/MODE/PADDING: " +csuite);
-    System.out.println("Used Key (hexadecimal rep.): "+ks);
-    System.out.println("Used Keysize: " +ksize);
-    System.out.println("Used Hash or Mac for integrty checks: " +hic);
-    System.out.println();
-    System.out.println("---------------------------------------------");
-    System.out.println("Performance indicators of streaming" );
-    System.out.println("delivered to receiver Box(es)");
-    System.out.println("---------------------------------------------");
-    System.out.println("Nr of sent frames: " + nf);
-    System.out.println("Average frame size: " + afs);
-    System.out.println("Movie size sent (all frames): " + ms);
-    System.out.println("Total elapsed time of streamed movie: " + etm);
-    System.out.println("Average sent frame rate (frames/sec): " +frate);
-    System.out.println("Observed troughput (KBytes/sec): " + tput);
-
-    }
-
-// ..... complete ...
-}
 
