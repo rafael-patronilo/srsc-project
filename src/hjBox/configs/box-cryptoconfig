@@ -1,7 +1,7 @@
 <127.0.0.1:6666>
-ciphersuite: AES/OFB/NoPadding  		//the ciphersuite for this box	
-key: b356198719e456a6			// AES key, in this case with 128 bits
-iv: 1076ab542789b5f6			// iv for OFB mode
-integrity: SHA1 				// meaning the use of SHA-1 in this case
-Mackey: NULL					// Don’t need in this case
-</127.00.1:6666>
+ciphersuite: AES/OFB/NoPadding
+key: 28472B4B6250655368566D5971337436
+iv: 1076ab542789b5f61076ab542789b5f6
+integrity: NULL
+Mackey: NULL
+</127.0.0.1:6666>

@@ -16,7 +16,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 
-class hjStreamServer {
+public class hjStreamServer {
 
     static public void main(String[] args) throws Exception {
 
@@ -51,8 +51,8 @@ class hjStreamServer {
         byte[] buff = new byte[4096]; // can change if required
         String[] moviePath = args[0].split("/");
         movie = moviePath[moviePath.length - 1];
-        CryptoStuff movieCrypto = CryptoStuff.loadFromFile("hjStreamServer/configs/movies-cryptoconfig", movie);
-        movieCrypto.printProperties();
+        //CryptoStuff movieCrypto = CryptoStuff.loadFromFile("hjStreamServer/configs/movies-cryptoconfig", movie);
+        //movieCrypto.printProperties();
         String box = args[1] + ":" + args[2];
         CryptoStuff boxCrypto = CryptoStuff.loadFromFile("hjStreamServer/configs/box-cryptoconfig", box);
         boxCrypto.printProperties();
