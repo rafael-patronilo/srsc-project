@@ -1,8 +1,8 @@
 package crypto;
 /**
- ** A utility class that encrypts or decrypts a file.
- ** Version 2
-**/
+ * * A utility class that encrypts or decrypts a file.
+ * * Version 2
+ **/
 
 
 // This is version 2 of CryptoStuff class (ex 3, Lab 1)
@@ -11,26 +11,29 @@ package crypto;
 // more clear and correct the utilization and generalization of
 // use ...
 
-import java.io.IOException;
-import java.security.Key;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.InvalidAlgorithmParameterException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.List;
-
+import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
-import javax.crypto.spec.SecretKeySpec;
-import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
-import javax.crypto.BadPaddingException;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.Key;
+import java.security.NoSuchAlgorithmException;
+import java.util.List;
 
 
-public class CryptoStuff
-{
-    private String key, algorithm, ciphersuite, iv, integrity, mackey;
+public class CryptoStuff {
+    private final String key;
+    private final String algorithm;
+    private final String ciphersuite;
+    private final String iv;
+    private final String integrity;
+    private final String mackey;
 
     private Cipher cipher;
     //For use in your TP1 implementation you must have the crytoconfigs
@@ -40,18 +43,18 @@ public class CryptoStuff
     // must have your own tool to encrypt the movie files that can
     // be used by your StreamingServer implementation
 
-     // See this according to the configuration of StreamingServer
-     // Initializaton vector ... See this according to the cryptoconfig
-     // of Streaming Server
+    // See this according to the configuration of StreamingServer
+    // Initializaton vector ... See this according to the cryptoconfig
+    // of Streaming Server
 
-     public CryptoStuff(String key, String algorithm, String ciphersuite, String iv, String integrity, String mackey){
-         this.key = key;
-         this.algorithm = algorithm;
-         this.ciphersuite = ciphersuite;
-         this.iv = iv;
-         this.integrity = integrity;
-         this.mackey = mackey;
-     }
+    public CryptoStuff(String key, String algorithm, String ciphersuite, String iv, String integrity, String mackey) {
+        this.key = key;
+        this.algorithm = algorithm;
+        this.ciphersuite = ciphersuite;
+        this.iv = iv;
+        this.integrity = integrity;
+        this.mackey = mackey;
+    }
 
     public static CryptoStuff loadFromFile(String path, String entry) throws IOException {
         List<String> lines = Files.readAllLines(Paths.get(path));
@@ -60,10 +63,10 @@ public class CryptoStuff
         String ciphersuite = null, key = null, iv = null, integrity = null, mackey = null;
         int i = 0;
         // skip until start of block
-        while(!lines.get(i).trim().equals(blockHeader)) i++;
+        while (!lines.get(i).trim().equals(blockHeader)) i++;
         i++;
-        while(!lines.get(i).trim().equals(blockFooter)){
-            if(lines.get(i).isBlank())
+        while (!lines.get(i).trim().equals(blockFooter)) {
+            if (lines.get(i).isBlank())
                 continue;
             String[] parts = lines.get(i).split(":");
             parts[0] = parts[0].trim().toLowerCase();
@@ -100,7 +103,7 @@ public class CryptoStuff
             }
             i++;
         }
-        if (ciphersuite == null || key == null || iv == null || integrity == null || mackey == null){
+        if (ciphersuite == null || key == null || iv == null || integrity == null || mackey == null) {
             throw new RuntimeException("Invalid configuration: Missing properties");
         }
         if (integrity.equalsIgnoreCase("null"))
@@ -111,8 +114,23 @@ public class CryptoStuff
         return new CryptoStuff(key, algorithm, ciphersuite, iv, integrity, mackey);
     }
 
-    public void printProperties(){
-         // TODO remove this
+    private static byte[] hexToBytes(String hex) {
+        byte[] bytes = new byte[hex.length() / 2 + hex.length() % 2];
+        for (int i = 0; i < hex.length() / 2; i++) {
+            char c0 = hex.charAt(i * 2);
+            int v0 = Character.digit(c0, 16);
+            char c1 = hex.charAt(i * 2 + 1);
+            int v1 = Character.digit(c1, 16);
+            bytes[i] = (byte) (v1 + v0 << 4);
+        }
+        if (hex.length() % 2 != 0) {
+            bytes[bytes.length - 1] = (byte) Character.digit(hex.charAt(hex.length() - 1), 16);
+        }
+        return bytes;
+    }
+
+    public void printProperties() {
+        // TODO remove this
         System.out.println("key = " + this.key);
         System.out.println("algorithm = " + this.algorithm);
         System.out.println("ciphersuite = " + this.ciphersuite);
@@ -121,56 +139,39 @@ public class CryptoStuff
         System.out.println("mackey = " + this.mackey);
     }
 
-     public void startEncryption() throws CryptoException{
-         startCrypto(Cipher.ENCRYPT_MODE);
-     }
+    public void startEncryption() throws CryptoException {
+        startCrypto(Cipher.ENCRYPT_MODE);
+    }
 
-    public void startDecryption() throws CryptoException{
+    public void startDecryption() throws CryptoException {
         startCrypto(Cipher.DECRYPT_MODE);
     }
 
-     private void startCrypto(int cipherMode) throws CryptoException {
-         try{
-             IvParameterSpec ivSpec = new IvParameterSpec(hexToBytes(iv));
-             Key secretKey = new SecretKeySpec(hexToBytes(key), algorithm);
-             this.cipher = Cipher.getInstance(this.ciphersuite);
-             cipher.init(cipherMode, secretKey, ivSpec);
-         }
-         catch (NoSuchPaddingException | NoSuchAlgorithmException
-                | InvalidKeyException
-                | InvalidAlgorithmParameterException ex) {
-             throw new CryptoException("Error encrypting/decrypting file", ex);
-         }
-     }
-
-     public byte[] update(byte[] data){
-         return cipher.update(data);
-     }
-
-     public byte[] endCrypto() throws CryptoException {
-         try {
-            Cipher tmp = this.cipher; // 
-            this.cipher = null; //
-            return tmp.doFinal();
-         }
-         catch (IllegalBlockSizeException | BadPaddingException ex){
+    private void startCrypto(int cipherMode) throws CryptoException {
+        try {
+            IvParameterSpec ivSpec = new IvParameterSpec(hexToBytes(iv));
+            Key secretKey = new SecretKeySpec(hexToBytes(key), algorithm);
+            this.cipher = Cipher.getInstance(this.ciphersuite);
+            cipher.init(cipherMode, secretKey, ivSpec);
+        } catch (NoSuchPaddingException | NoSuchAlgorithmException
+                 | InvalidKeyException
+                 | InvalidAlgorithmParameterException ex) {
             throw new CryptoException("Error encrypting/decrypting file", ex);
         }
-     }
+    }
 
-    private static byte[] hexToBytes(String hex){
-        byte[] bytes = new byte[hex.length() / 2 + hex.length() % 2];
-        for (int i = 0; i < hex.length() / 2; i++) {
-            char c0 = hex.charAt(i*2);
-            int v0 = Character.digit(c0, 16);
-            char c1 = hex.charAt(i*2+1);
-            int v1 = Character.digit(c1, 16);
-            bytes[i] = (byte) (v1 + v0 << 4);
+    public byte[] update(byte[] data) {
+        return cipher.update(data);
+    }
+
+    public byte[] endCrypto() throws CryptoException {
+        try {
+            Cipher tmp = this.cipher; //
+            this.cipher = null; //
+            return tmp.doFinal();
+        } catch (IllegalBlockSizeException | BadPaddingException ex) {
+            throw new CryptoException("Error encrypting/decrypting file", ex);
         }
-        if(hex.length()%2 != 0){
-            bytes[bytes.length-1] = (byte)Character.digit(hex.charAt(hex.length()-1), 16);
-        }
-        return bytes;
     }
 
 }
