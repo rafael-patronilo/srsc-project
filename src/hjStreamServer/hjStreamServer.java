@@ -20,9 +20,9 @@ public class hjStreamServer {
 
     static public void main(String[] args) throws Exception {
 
-        if (args.length != 3) {
-            System.out.println("Use: hjStreamServer <movie> <ip-multicast-address> <port>");
-            System.out.println("or: hjStreamServer <movie> <ip-unicast-address> <port>");
+        if (args.length != 4) {
+            System.out.println("Use: hjStreamServer <movie> <ip-multicast-address> <port> <box-ip>");
+            System.out.println("or: hjStreamServer <movie> <ip-unicast-address> <port> <box-ip>");
             System.exit(-1);
         }
 
@@ -53,7 +53,7 @@ public class hjStreamServer {
         movie = moviePath[moviePath.length - 1];
         //CryptoStuff movieCrypto = CryptoStuff.loadFromFile("hjStreamServer/configs/movies-cryptoconfig", movie);
         //movieCrypto.printProperties();
-        String box = args[1] + ":" + args[2];
+        String box = args[3];
         CryptoStuff boxCrypto = CryptoStuff.loadFromFile("hjStreamServer/configs/box-cryptoconfig", box);
         boxCrypto.printProperties();
 
