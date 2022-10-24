@@ -1,7 +1,0 @@
-<127.0.0.1:6666>
-ciphersuite: AES/OFB/NoPadding
-key: b356198719e456a6
-iv: 1076ab542789b5f6
-integrity: SHA1
-Mackey: NULL
-</127.0.0.1:6666>
