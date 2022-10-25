@@ -73,6 +73,7 @@ public class hjBox {
         DatagramSocket inSocket = new DatagramSocket(inSocketAddress);
         DatagramSocket outSocket = new DatagramSocket();
         byte[] buffer = new byte[4096];
+        int packetSize;
         // probably you ned to use a larger buffer for the requirements of
         // TP1 - remember that you will receive datagrams with encrypted
         // contents, so depending on the crypto configurations, the datagrams
@@ -85,13 +86,14 @@ public class hjBox {
         while (buffer.length > 0) {
             DatagramPacket inPacket = new DatagramPacket(buffer, buffer.length);
             inSocket.receive(inPacket);
-            buffer = boxCrypto.update(buffer);
-
-            System.out.print("*"); // Just for debug. Comment for final
+            //packetSize = inPacket.getLength();
+            packetSize = boxCrypto.update(buffer, inPacket.getLength());
+            System.out.println(inPacket.getLength() + " "  + packetSize);
+            //System.out.print("*"); // Just for debug. Comment for final
             // observations and statistics
 
             for (SocketAddress outSocketAddress : outSocketAddressSet) {
-                outSocket.send(new DatagramPacket(buffer, inPacket.getLength(), outSocketAddress));
+                outSocket.send(new DatagramPacket(buffer, packetSize, outSocketAddress));
             }
 
         }

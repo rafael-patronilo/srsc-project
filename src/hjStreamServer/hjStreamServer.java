@@ -64,20 +64,23 @@ public class hjStreamServer {
         long t0 = System.nanoTime(); // current time
         long q0 = 0;
         boxCrypto.startEncryption();
+        int packetSize;
         while (g.available() > 0) {
             size = g.readShort();
             time = g.readLong();
             if (count == 0) q0 = time; // ref time encoded
             count += 1;
             g.readFully(buff, 0, size);
-            buff = boxCrypto.update(buff);
-            p.setData(buff, 0, buff.length);
+            //packetSize = size;
+            packetSize = boxCrypto.update(buff, size);
+            p.setData(buff, 0, packetSize);
             p.setSocketAddress(addr);
             long t = System.nanoTime();
             Thread.sleep(Math.max(0, ((time - q0) - (t - t0)) / 1000000));
             // send packet (with a frame payload)
             s.send(p);
-            System.out.print("."); // only for debug
+            System.out.println(size + " " + packetSize);
+            //System.out.print("."); // only for debug
             // comment this for final experiment al observations
         }
         buff = boxCrypto.endCrypto();

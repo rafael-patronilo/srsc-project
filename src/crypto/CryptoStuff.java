@@ -11,10 +11,7 @@ package crypto;
 // more clear and correct the utilization and generalization of
 // use ...
 
-import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
+import javax.crypto.*;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
@@ -156,12 +153,19 @@ public class CryptoStuff {
         } catch (NoSuchPaddingException | NoSuchAlgorithmException
                  | InvalidKeyException
                  | InvalidAlgorithmParameterException ex) {
-            throw new CryptoException("Error encrypting/decrypting file", ex);
+            throw new CryptoException("Error encrypting/decrypting data", ex);
         }
     }
 
-    public byte[] update(byte[] data) {
-        return cipher.update(data);
+    public int update(byte[] data) throws CryptoException {return update(data, data.length);}
+
+    public int update(byte[] data, int length) throws CryptoException {
+        try {
+            int len = cipher.update(data, 0, length, data);
+            return len;
+        } catch (ShortBufferException ex){
+            throw new CryptoException("Error encrypting/decrypting data", ex);
+        }
     }
 
     public byte[] endCrypto() throws CryptoException {
