@@ -41,7 +41,7 @@ public class hjStreamServer {
         String hic; // Hash function used for integrity checks
         int nf;     // number of sent frames in a mmvie transmission
         int afs;    // average frame size in transmited frames
-        int ms;     // total size of the movie (all segments) in Kbytes
+        int ms = 0;     // total size of the movie (all segments) in Kbytes
         int etm;    // total elapsed time of the streamed movie
         int frate;  // observed frame rate in segments/sec)
         int tput;   // observed throughput (in Kbytes/sec)
@@ -62,11 +62,19 @@ public class hjStreamServer {
                 new InetSocketAddress(args[1], Integer.parseInt(args[2]));
         DatagramPacket p = new DatagramPacket(buff, buff.length, addr);
         long t0 = System.nanoTime(); // current time
+        long t = t0;
         long q0 = 0;
         boxCrypto.startEncryption();
         int packetSize;
+
+        // send movie name
+        byte[] movieB = movie.getBytes();
+        p.setData(movieB);
+        s.send(p);
+
         while (g.available() > 0) {
             size = g.readShort();
+            ms += size;
             time = g.readLong();
             if (count == 0) q0 = time; // ref time encoded
             count += 1;
@@ -75,7 +83,7 @@ public class hjStreamServer {
             packetSize = boxCrypto.update(buff, size);
             p.setData(buff, 0, packetSize);
             p.setSocketAddress(addr);
-            long t = System.nanoTime();
+            t = System.nanoTime();
             Thread.sleep(Math.max(0, ((time - q0) - (t - t0)) / 1000000));
             // send packet (with a frame payload)
             s.send(p);
@@ -95,10 +103,20 @@ public class hjStreamServer {
 
         System.out.println
                 ("DONE! all frames sent in this streaming transmission: " + count);
+        csuite = boxCrypto.getCiphersuite();
+        k = boxCrypto.getKey();
+        ksize = k.length()*8;
+        hic = ""; //TODO put something here
+        nf = count;
+        etm = (int)((t - t0) / 1_000_000_000L); // seconds
+        afs = ms / nf;
+        frate = nf / etm;
+        tput = (ms / 1000) / etm;
+        PrintStats(movie, csuite, k, ksize, hic, nf, afs, ms, etm, frate, tput);
     }
 
 
-    private void PrintStats(String movie, String csuite, String ks,
+    private static void PrintStats(String movie, String csuite, String ks,
                             int ksize, String hic,
                             int nf, int afs, int ms, int etm,
                             int frate, int tput) {

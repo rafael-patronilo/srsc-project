@@ -111,6 +111,15 @@ public class CryptoStuff {
         return new CryptoStuff(key, algorithm, ciphersuite, iv, integrity, mackey);
     }
 
+
+    public String getKey() {
+        return key;
+    }
+
+    public String getCiphersuite() {
+        return ciphersuite;
+    }
+
     private static byte[] hexToBytes(String hex) {
         byte[] bytes = new byte[hex.length() / 2 + hex.length() % 2];
         for (int i = 0; i < hex.length() / 2; i++) {

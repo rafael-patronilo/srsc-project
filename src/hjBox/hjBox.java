@@ -14,12 +14,14 @@ package hjBox;
 
 import crypto.CryptoStuff;
 
+import javax.xml.crypto.Data;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.Set;
@@ -36,25 +38,6 @@ public class hjBox {
 
     public static void main(String[] args) throws Exception {
 
-        // Need these variables for instrumentation metrics on
-        // received and processed streams delivered to the
-        // media player
-        String movie; // name of received movie
-        String csuite; // used cyphersuite to process the received stream
-        String k;   // The key used, in Hexadecimal representation
-        int ksize;  // The key size
-        String hic; // Hash function used for integrity checks
-        int ascsegments;    // average size of encrypted segments received
-        int decsegments;    // average size of decrypted segments received
-        int nf;     // number of received frames in a movie transmission
-        int afs;    // average frame size in a movie transmission
-        int ms;     // total size of the received movie (all segments) in Kbytes
-        int etm;    // total elapsed time of the received movie
-        int frate;  // observed frame rate in segments/sec)
-        int tput;   // observed throughput in the channel (in Kbytes/sec)
-        int corruptedframes;   // Nr of corrupted frames discarded (not sent to the media player
-        // can add more instrumentation variables considered as interesting
-
         InputStream inputStream = new FileInputStream("hjBox/configs/config.properties");
         if (inputStream == null) {
             System.err.println("Configuration file not found!");
@@ -69,11 +52,9 @@ public class hjBox {
         Set<SocketAddress> outSocketAddressSet = Arrays.stream(destinations.split(",")).map(s -> parseSocketAddress(s)).collect(Collectors.toSet());
         CryptoStuff boxCrypto = CryptoStuff.loadFromFile("hjBox/configs/box-cryptoconfig", "127.0.0.1:6666");
         boxCrypto.printProperties();
-        boxCrypto.startDecryption();
         DatagramSocket inSocket = new DatagramSocket(inSocketAddress);
         DatagramSocket outSocket = new DatagramSocket();
         byte[] buffer = new byte[4096];
-        int packetSize;
         // probably you ned to use a larger buffer for the requirements of
         // TP1 - remember that you will receive datagrams with encrypted
         // contents, so depending on the crypto configurations, the datagrams
@@ -82,12 +63,54 @@ public class hjBox {
         // Not that this Box is always trying to receive streams
         // You must modify this to control teh end of one received
         // movie) to obtain the related statistics (see PrintStats)
-
-        while (buffer.length > 0) {
+        while (true){
             DatagramPacket inPacket = new DatagramPacket(buffer, buffer.length);
             inSocket.receive(inPacket);
+            String movie = new String(buffer, 0, buffer.length);
+            streamMovie(movie, buffer, inSocket, outSocket, outSocketAddressSet, boxCrypto);
+        }
+
+    }
+
+    private static void streamMovie(String movie, byte[] buffer, DatagramSocket inSocket,
+                                    DatagramSocket outSocket, Set<SocketAddress> outSocketAddressSet,
+                                    CryptoStuff boxCrypto)
+            throws Exception{
+        // Need these variables for instrumentation metrics on
+        // received and processed streams delivered to the
+        // media player
+        String csuite; // used cyphersuite to process the received stream
+        String k;   // The key used, in Hexadecimal representation
+        int ksize;  // The key size
+        String hic; // Hash function used for integrity checks
+        int ascsegments = 0;    // average size of encrypted segments received
+        int decsegments = 0;    // average size of decrypted segments received
+        int nf;     // number of received frames in a movie transmission
+        int afs;    // average frame size in a movie transmission
+        int ms = 0;     // total size of the received movie (all segments) in Kbytes
+        int etm;    // total elapsed time of the received movie
+        int frate;  // observed frame rate in segments/sec)
+        int tput;   // observed throughput in the channel (in Kbytes/sec)
+        int corruptedframes;   // Nr of corrupted frames discarded (not sent to the media player
+        // can add more instrumentation variables considered as interesting
+        int count = 0;
+        long t, t0 = 0;
+
+        System.out.println("Now playing: " + movie);
+        int packetSize;
+        boxCrypto.startDecryption();
+        while (true) {
+            if(count == 0) t0 = System.nanoTime();
+            count++;
+            DatagramPacket inPacket = new DatagramPacket(buffer, buffer.length);
+            inSocket.receive(inPacket);
+            ascsegments += inPacket.getLength();
             //packetSize = inPacket.getLength();
             packetSize = boxCrypto.update(buffer, inPacket.getLength());
+            decsegments += packetSize;
+            if (packetSize == 0)
+                break;
+            ms += packetSize; //TODO distinguish between encoded segment and received frame?
             System.out.println(inPacket.getLength() + " "  + packetSize);
             //System.out.print("*"); // Just for debug. Comment for final
             // observations and statistics
@@ -95,13 +118,65 @@ public class hjBox {
             for (SocketAddress outSocketAddress : outSocketAddressSet) {
                 outSocket.send(new DatagramPacket(buffer, packetSize, outSocketAddress));
             }
-
         }
-        // TODO: You must control/detect the end of a streamed movie to
+        t = System.nanoTime();
         // call PrintStats to print the obtained statistics from
         // required instrumentation variables for experimental observations
 
         // PrintStats (......)
         boxCrypto.endCrypto();
+        csuite = boxCrypto.getCiphersuite();
+        k = boxCrypto.getKey();
+        ksize = k.length()*8;
+        hic = ""; //TODO put something here
+        corruptedframes = 0; //TODO change this
+        nf = count - 1; // last packet isn't a frame
+        etm = (int)((t - t0) / 1_000_000_000L); // seconds
+        afs = ms / nf;
+        frate = nf / etm;
+        tput = (ms / 1000) / etm;
+        ascsegments /= nf;
+        decsegments /= nf;
+
+        PrintStats(movie, csuite, hic, k, ksize,  nf,
+                afs, ms, etm, frate, tput, ascsegments, decsegments, corruptedframes);
+        System.out.println();
+    }
+
+    private static void PrintStats(String movie, String csuite, String hic,
+                            String ks, int ksize,
+                            int nf, int afs, int ms, int etm,
+                            int frate, int tput,
+                            int asesegments, int asdecsegments, int csegments) {
+
+        System.out.println("---------------------------------------------");
+        System.out.println("BOX Indicators and Statistics");
+        System.out.println("---------------------------------------------");
+        System.out.println();
+        System.out.println("---------------------------------------------");
+        System.out.println("Receved Movie and used Cryptographic Configs");
+        System.out.println("---------------------------------------------");
+        System.out.println("Received movie (receoved streamed):" + movie);
+        System.out.println("Used ciphersuite ALG/MODE/PADDING: " + csuite);
+        System.out.println("Used Key (hexadecimal rep.): " + ks);
+        System.out.println("Used Keysize: " + ksize);
+        System.out.println("Used Hash for integrty checks: " + hic);
+
+        System.out.println();
+        System.out.println("---------------------------------------------");
+        System.out.println("Performance indicators of received stream");
+        System.out.println("processed delivered to the media player");
+        System.out.println("---------------------------------------------");
+        System.out.println("avg size of the received encrypted segments: " + asesegments);
+        System.out.println("avg size of the decrypted segments: " + asdecsegments);
+        System.out.println("Nr of received frames: " + nf);
+        System.out.println("Processed average frame size: " + afs);
+        System.out.println("Received movie size (all frames): " + ms);
+        System.out.println("Total elapsed time of received movie (sec): " + etm);
+        System.out.println("Average frame rate (frames/sec): " + frate);
+        System.out.println("Box observed troughput (KBytes/sec): " + tput);
+        System.out.println("Nr of segments w/ integrity invalidation \n(filtered and not sent to the media player) " +
+                csegments);
+        System.out.println("---------------------------------------------");
     }
 }
