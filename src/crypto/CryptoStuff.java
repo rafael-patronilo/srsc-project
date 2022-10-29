@@ -210,13 +210,12 @@ public class CryptoStuff {
     }
 
     private int encryptionUpdate(byte[] data, int length) throws CryptoException{
-        int packetLength = length - integrityLength();
-        int consumedNow = ((packetLength+leftover) / cipher.getBlockSize()) * cipher.getBlockSize() - leftover;
-        this.leftover = packetLength - consumedNow;
-        byte[] leftoverBytes = Arrays.copyOfRange(data, consumedNow, packetLength);
+        int consumedNow = ((length+leftover) / cipher.getBlockSize()) * cipher.getBlockSize() - leftover;
+        this.leftover = length - consumedNow;
+        byte[] leftoverBytes = Arrays.copyOfRange(data, consumedNow, length);
         try {
             updateHash(data, consumedNow);
-            int postLength = cipher.update(data, 0, packetLength, data);
+            int postLength = cipher.update(data, 0, length, data);
             updateHmac(data, postLength);
             putIntegrityCode(data, postLength);
             updateHash(leftoverBytes, leftover);
@@ -326,9 +325,6 @@ public class CryptoStuff {
      * @return the size
      */
     private int integrityLength(){
-        if(cipherMode != Cipher.DECRYPT_MODE){
-            return 0;
-        }
         if(mac!=null){
             return mac.getMacLength();
         } else if (digest != null) {
