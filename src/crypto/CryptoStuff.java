@@ -19,9 +19,12 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.*;
 import java.util.List;
-
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 public class CryptoStuff {
+    static {
+        Security.addProvider(new BouncyCastleProvider());
+    }
     private final String key;
     private final String algorithm;
     private final String ciphersuite;
