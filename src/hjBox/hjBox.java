@@ -117,7 +117,7 @@ public class hjBox {
                     outSocket.send(new DatagramPacket(buffer, packetSize, outSocketAddress));
                 }
             } catch (IntegrityException e){
-                System.out.println("Corrupted");
+                System.out.println("Corrupted " + e.getMessage());
                 corruptedframes++;
             }
         }
