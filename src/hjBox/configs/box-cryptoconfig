@@ -2,6 +2,6 @@
 ciphersuite: AES/OFB/NoPadding
 key: 28472B4B6250655368566D5971337436
 iv: 1076ab542789b5f60bb1791b94e3b6fe
-integrity: NULL
+integrity: SHA1
 Mackey: NULL
 </127.0.0.1:6666>

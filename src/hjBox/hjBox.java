@@ -13,6 +13,7 @@ package hjBox;
  */
 
 import crypto.CryptoStuff;
+import crypto.IntegrityException;
 
 import javax.xml.crypto.Data;
 import java.io.FileInputStream;
@@ -91,7 +92,7 @@ public class hjBox {
         int etm;    // total elapsed time of the received movie
         int frate;  // observed frame rate in segments/sec)
         int tput;   // observed throughput in the channel (in Kbytes/sec)
-        int corruptedframes;   // Nr of corrupted frames discarded (not sent to the media player
+        int corruptedframes = 0;   // Nr of corrupted frames discarded (not sent to the media player
         // can add more instrumentation variables considered as interesting
         int count = 0;
         long t, t0 = 0;
@@ -105,18 +106,19 @@ public class hjBox {
             DatagramPacket inPacket = new DatagramPacket(buffer, buffer.length);
             inSocket.receive(inPacket);
             ascsegments += inPacket.getLength();
-            //packetSize = inPacket.getLength();
-            packetSize = boxCrypto.update(buffer, inPacket.getLength());
-            decsegments += packetSize;
-            if (packetSize == 0)
-                break;
-            ms += packetSize; //TODO distinguish between encoded segment and received frame?
-            System.out.println(inPacket.getLength() + " "  + packetSize);
-            //System.out.print("*"); // Just for debug. Comment for final
-            // observations and statistics
-
-            for (SocketAddress outSocketAddress : outSocketAddressSet) {
-                outSocket.send(new DatagramPacket(buffer, packetSize, outSocketAddress));
+            try {
+                packetSize = boxCrypto.update(buffer, inPacket.getLength());
+                decsegments += packetSize;
+                if (packetSize == 0)
+                    break;
+                ms += packetSize; //TODO distinguish between encoded segment and received frame?
+                System.out.println(inPacket.getLength() + " "  + packetSize);
+                for (SocketAddress outSocketAddress : outSocketAddressSet) {
+                    outSocket.send(new DatagramPacket(buffer, packetSize, outSocketAddress));
+                }
+            } catch (IntegrityException e){
+                System.out.println("Corrupted");
+                corruptedframes++;
             }
         }
         t = System.nanoTime();
@@ -129,7 +131,6 @@ public class hjBox {
         k = boxCrypto.getKey();
         ksize = k.length()*8;
         hic = ""; //TODO put something here
-        corruptedframes = 0; //TODO change this
         nf = count - 1; // last packet isn't a frame
         etm = (int)((t - t0) / 1_000_000_000L); // seconds
         afs = ms / nf;

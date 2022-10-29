@@ -18,7 +18,9 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.*;
+import java.util.Arrays;
 import java.util.List;
+import java.security.MessageDigest;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 public class CryptoStuff {
@@ -35,6 +37,11 @@ public class CryptoStuff {
     private final String integrityCheck;
 
     private Cipher cipher;
+    private int cipherMode = -1;
+    private MessageDigest digest;
+    private Mac mac;
+
+    private int leftover;
     //For use in your TP1 implementation you must have the crytoconfigs
     //according to the StreamingServer crypto configs
     //because thsi is just an illustrative example with specific
@@ -116,6 +123,8 @@ public class CryptoStuff {
             integrity = null;
         if (mackey.equalsIgnoreCase("null"))
             mackey = null;
+        if(mackey != null && integrityCheck == null)
+            throw new RuntimeException("Mac Key provided but no integrity method specified.");
         if (integrityCheck != null && integrityCheck.equalsIgnoreCase("null"))
             integrityCheck = null;
         String algorithm = ciphersuite.split("/")[0];
@@ -138,12 +147,24 @@ public class CryptoStuff {
             int v0 = Character.digit(c0, 16);
             char c1 = hex.charAt(i * 2 + 1);
             int v1 = Character.digit(c1, 16);
-            bytes[i] = (byte) (v1 + v0 << 4);
+            bytes[i] = (byte) (v1 + v0 * 16);
         }
         if (hex.length() % 2 != 0) {
             bytes[bytes.length - 1] = (byte) Character.digit(hex.charAt(hex.length() - 1), 16);
         }
         return bytes;
+    }
+
+    public static String bytesToHex(byte[] bytes){
+        return bytesToHex(bytes, bytes.length);
+    }
+
+    public static String bytesToHex(byte[] bytes, int length){
+        StringBuilder builder = new StringBuilder(length*2);
+        for (int i = 0; i < length; i++) {
+            builder.append(String.format("%02x", bytes[i]));
+        }
+        return builder.toString();
     }
 
     public void printProperties() {
@@ -153,6 +174,8 @@ public class CryptoStuff {
         System.out.println("ciphersuite = " + this.ciphersuite);
         System.out.println("iv = " + this.iv);
         System.out.println("integrity = " + this.integrity);
+        if(integrityCheck!=null)
+            System.out.println("integrity-check = " + this.integrityCheck);
         System.out.println("mackey = " + this.mackey);
     }
 
@@ -164,41 +187,66 @@ public class CryptoStuff {
         initCipher(Cipher.DECRYPT_MODE);
     }
 
-
-    public int update(byte[] data) throws CryptoException {return update(data, data.length);}
-
-    public int update(byte[] data, int length) throws CryptoException {
+    public int update(byte[] data, int length) throws CryptoException, IntegrityException {
+        int packetLength = length - integrityLength();
+        int consumedNow = ((packetLength+leftover) / cipher.getBlockSize()) * cipher.getBlockSize() - leftover;
+        this.leftover = packetLength - consumedNow;
+        byte[] code = Arrays.copyOfRange(data, packetLength, length);
+        byte[] leftoverBytes = Arrays.copyOfRange(data, consumedNow, packetLength);
         try {
-            int len = cipher.update(data, 0, length, data);
-            return len;
+            updateHash(data, packetLength);
+            int postLength = cipher.update(data, 0, packetLength, data);
+            updateHmac(data, postLength);
+            if(cipherMode == Cipher.DECRYPT_MODE) {
+                checkIntegrity(code);
+                return postLength;
+            } else {
+                putIntegrityCode(data, postLength);
+                updateHash(leftoverBytes, leftover);
+                return postLength + integrityLength();
+            }
         } catch (ShortBufferException ex){
             throw new CryptoException("Error encrypting/decrypting data", ex);
         }
     }
 
+    private void clearCipher(){
+        this.cipher = null;
+        this.cipherMode = -1;
+        this.digest = null;
+    }
+
     public byte[] endCrypto() throws CryptoException {
         try {
-            Cipher tmp = this.cipher; //
-            this.cipher = null; //
+            Cipher tmp = this.cipher;
+            clearCipher();
             return tmp.doFinal();
         } catch (IllegalBlockSizeException | BadPaddingException ex) {
-            throw new CryptoException("Error encrypting/decrypting file", ex);
+            throw new CryptoException("Error encrypting/decrypting data", ex);
         }
     }
 
-    public byte[] decryptFile(String filepath) throws CryptoException {
-        //TODO check integrity
-        return doFile(Cipher.DECRYPT_MODE, new File(filepath));
+    public byte[] decryptFile(String filepath) throws CryptoException, IntegrityException {
+        initCipher(Cipher.DECRYPT_MODE);
+        byte[] data = doFile(new File(filepath));
+        updateHash(data, data.length);
+        updateHmac(data, data.length);
+        checkIntegrity(hexToBytes(integrityCheck));
+        clearCipher();
+        return data;
     }
 
     public void encryptFile(String filepath, String outpath) throws CryptoException{
         File inFile = new File(filepath);
         File outFile = new File(outpath);
         try {
-            byte[] outputBytes = doFile(Cipher.ENCRYPT_MODE, inFile);
+            initCipher(Cipher.ENCRYPT_MODE);
+            byte[] outputBytes = doFile(inFile);
             FileOutputStream outputStream = new FileOutputStream(outFile);
             outputStream.write(outputBytes);
             outputStream.close();
+            clearCipher();
+
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -210,6 +258,15 @@ public class CryptoStuff {
             Key secretKey = new SecretKeySpec(hexToBytes(key), algorithm);
             this.cipher = Cipher.getInstance(this.ciphersuite);
             this.cipher.init(cipherMode, secretKey, ivSpec);
+            this.cipherMode = cipherMode;
+            if(this.mackey != null){
+                this.mac = Mac.getInstance(this.integrity);
+                Key macSpec = new SecretKeySpec(hexToBytes(this.mackey), this.integrity);
+                this.mac.init(macSpec);
+            }
+            else if (this.integrity != null) {
+                this.digest = MessageDigest.getInstance(this.integrity);
+            }
         } catch (NoSuchPaddingException | NoSuchAlgorithmException
                      | InvalidKeyException
                      | InvalidAlgorithmParameterException ex) {
@@ -217,17 +274,85 @@ public class CryptoStuff {
         }
     }
 
-    private byte[] doFile(int cipherMode, File inputFile) throws CryptoException
+    private void updateHash(byte[] buffer, int dataLength){
+        if(digest != null){
+            digest.update(buffer, 0, dataLength);
+        }
+    }
+
+    private void updateHmac(byte[] buffer, int dataLength){
+        if(mac != null){
+            mac.update(buffer, 0, dataLength);
+        }
+    }
+
+    private int putIntegrityCode(byte[] buffer, int offset) throws CryptoException{
+        try {
+            int length = 0;
+            if (mac != null) {
+                mac.doFinal(buffer, offset);
+                length = mac.getMacLength();
+                mac.reset();
+            } else if (digest != null) {
+                length = digest.digest(buffer, offset, digest.getDigestLength());
+                digest.reset();
+            }
+            return length;
+        }
+        catch (ShortBufferException | DigestException e){
+            throw new CryptoException("Error encrypting/decrypting data", e);
+        }
+    }
+
+    /**
+     * Size of the integrity code at the end of an incoming packet
+     * Always 0 in EncryptMode
+     * @return the size
+     */
+    private int integrityLength(){
+        if(cipherMode != Cipher.DECRYPT_MODE){
+            return 0;
+        }
+        if(mac!=null){
+            return mac.getMacLength();
+        } else if (digest != null) {
+            return digest.getDigestLength();
+        }
+        return 0;
+    }
+
+    private void checkIntegrity(byte[] code) throws IntegrityException{
+        byte[] resultIntegrity = null;
+        if(mac!=null){
+            resultIntegrity = mac.doFinal();
+            mac.reset();
+        } else if (digest != null) {
+            resultIntegrity = digest.digest();
+            digest.reset();
+        }
+        if(resultIntegrity == null)
+            return;
+        if(code.length != resultIntegrity.length){
+            throw new IntegrityException("Different Sizes: Correct = " + bytesToHex(code) +
+                    "; Computed = " + bytesToHex(resultIntegrity));
+        }
+        for (int i = 0; i < code.length; i++) {
+            if(code[i] != resultIntegrity[i]) {
+                throw new IntegrityException("Different Bytes: Correct = " + bytesToHex(code) +
+                        "; Computed = " + bytesToHex(resultIntegrity));
+            }
+        }
+    }
+
+    private byte[] doFile(File inputFile) throws CryptoException
     {
         try {
-            initCipher(cipherMode);
             FileInputStream inputStream = new FileInputStream(inputFile);
             byte[] inputBytes = new byte[(int) inputFile.length()];
             inputStream.read(inputBytes);
             byte[] outputBytes = cipher.doFinal(inputBytes);
 
             inputStream.close();
-            this.cipher = null;
 
             return outputBytes;
         }

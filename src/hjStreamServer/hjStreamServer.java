@@ -10,6 +10,7 @@ package hjStreamServer;
 
 import crypto.CryptoStuff;
 
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.FileInputStream;
 import java.net.DatagramPacket;
@@ -46,16 +47,21 @@ public class hjStreamServer {
         int frate;  // observed frame rate in segments/sec)
         int tput;   // observed throughput (in Kbytes/sec)
 
-        DataInputStream g =
-                new DataInputStream(new FileInputStream(args[0]));
-        byte[] buff = new byte[4096]; // can change if required
+        String box = args[3];
         String[] moviePath = args[0].split("/");
         movie = moviePath[moviePath.length - 1];
-        //CryptoStuff movieCrypto = CryptoStuff.loadFromFile("hjStreamServer/configs/movies-cryptoconfig", movie);
-        //movieCrypto.printProperties();
-        String box = args[3];
+
         CryptoStuff boxCrypto = CryptoStuff.loadFromFile("hjStreamServer/configs/box-cryptoconfig", box);
         boxCrypto.printProperties();
+        CryptoStuff movieCrypto = CryptoStuff.loadFromFile("hjStreamServer/configs/movies-cryptoconfig", movie);
+        movieCrypto.printProperties();
+
+        byte[] movieData = movieCrypto.decryptFile(args[0]);
+
+        DataInputStream g =
+                new DataInputStream(new ByteArrayInputStream(movieData));
+        byte[] buff = new byte[4096]; // can change if required
+
 
         DatagramSocket s = new DatagramSocket();
         InetSocketAddress addr =
