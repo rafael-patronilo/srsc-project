@@ -14,13 +14,10 @@ package crypto;
 import javax.crypto.*;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
-import java.security.Key;
-import java.security.NoSuchAlgorithmException;
+import java.security.*;
 import java.util.List;
 
 
@@ -31,6 +28,8 @@ public class CryptoStuff {
     private final String iv;
     private final String integrity;
     private final String mackey;
+
+    private final String integrityCheck;
 
     private Cipher cipher;
     //For use in your TP1 implementation you must have the crytoconfigs
@@ -44,20 +43,22 @@ public class CryptoStuff {
     // Initializaton vector ... See this according to the cryptoconfig
     // of Streaming Server
 
-    public CryptoStuff(String key, String algorithm, String ciphersuite, String iv, String integrity, String mackey) {
+    public CryptoStuff(String key, String algorithm, String ciphersuite, String iv,
+                       String integrity, String mackey, String integrityCheck) {
         this.key = key;
         this.algorithm = algorithm;
         this.ciphersuite = ciphersuite;
         this.iv = iv;
         this.integrity = integrity;
         this.mackey = mackey;
+        this.integrityCheck = integrityCheck;
     }
 
     public static CryptoStuff loadFromFile(String path, String entry) throws IOException {
         List<String> lines = Files.readAllLines(Paths.get(path));
         String blockHeader = String.format("<%s>", entry);
         String blockFooter = String.format("</%s>", entry);
-        String ciphersuite = null, key = null, iv = null, integrity = null, mackey = null;
+        String ciphersuite = null, key = null, iv = null, integrity = null, mackey = null, integrityCheck = null;
         int i = 0;
         // skip until start of block
         while (!lines.get(i).trim().equals(blockHeader)) i++;
@@ -89,6 +90,11 @@ public class CryptoStuff {
                         throw new RuntimeException("Invalid configuration: Repeated property " + parts[0]);
                     integrity = parts[1];
                 }
+                case "integrity-check" -> {
+                    if (integrityCheck != null)
+                        throw new RuntimeException("Invalid configuration: Repeated property " + parts[0]);
+                    integrityCheck = parts[1];
+                }
                 case "mackey" -> {
                     if (mackey != null)
                         throw new RuntimeException("Invalid configuration: Repeated property " + parts[0]);
@@ -107,8 +113,10 @@ public class CryptoStuff {
             integrity = null;
         if (mackey.equalsIgnoreCase("null"))
             mackey = null;
+        if (integrityCheck != null && integrityCheck.equalsIgnoreCase("null"))
+            integrityCheck = null;
         String algorithm = ciphersuite.split("/")[0];
-        return new CryptoStuff(key, algorithm, ciphersuite, iv, integrity, mackey);
+        return new CryptoStuff(key, algorithm, ciphersuite, iv, integrity, mackey, integrityCheck);
     }
 
 
@@ -146,25 +154,13 @@ public class CryptoStuff {
     }
 
     public void startEncryption() throws CryptoException {
-        startCrypto(Cipher.ENCRYPT_MODE);
+        initCipher(Cipher.ENCRYPT_MODE);
     }
 
     public void startDecryption() throws CryptoException {
-        startCrypto(Cipher.DECRYPT_MODE);
+        initCipher(Cipher.DECRYPT_MODE);
     }
 
-    private void startCrypto(int cipherMode) throws CryptoException {
-        try {
-            IvParameterSpec ivSpec = new IvParameterSpec(hexToBytes(iv));
-            Key secretKey = new SecretKeySpec(hexToBytes(key), algorithm);
-            this.cipher = Cipher.getInstance(this.ciphersuite);
-            cipher.init(cipherMode, secretKey, ivSpec);
-        } catch (NoSuchPaddingException | NoSuchAlgorithmException
-                 | InvalidKeyException
-                 | InvalidAlgorithmParameterException ex) {
-            throw new CryptoException("Error encrypting/decrypting data", ex);
-        }
-    }
 
     public int update(byte[] data) throws CryptoException {return update(data, data.length);}
 
@@ -187,4 +183,57 @@ public class CryptoStuff {
         }
     }
 
+    public byte[] decryptFile(String filepath) throws CryptoException {
+        //TODO check integrity
+        return doFile(Cipher.DECRYPT_MODE, new File(filepath));
+    }
+
+    public void encryptFile(String filepath, String outpath) throws CryptoException{
+        File inFile = new File(filepath);
+        File outFile = new File(outpath);
+        try {
+            byte[] outputBytes = doFile(Cipher.ENCRYPT_MODE, inFile);
+            FileOutputStream outputStream = new FileOutputStream(outFile);
+            outputStream.write(outputBytes);
+            outputStream.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void initCipher(int cipherMode) throws CryptoException {
+        try{
+            IvParameterSpec ivSpec = new IvParameterSpec(hexToBytes(iv));
+            Key secretKey = new SecretKeySpec(hexToBytes(key), algorithm);
+            this.cipher = Cipher.getInstance(this.ciphersuite);
+            this.cipher.init(cipherMode, secretKey, ivSpec);
+        } catch (NoSuchPaddingException | NoSuchAlgorithmException
+                     | InvalidKeyException
+                     | InvalidAlgorithmParameterException ex) {
+            throw new CryptoException("Error encrypting/decrypting data", ex);
+        }
+    }
+
+    private byte[] doFile(int cipherMode, File inputFile) throws CryptoException
+    {
+        try {
+            initCipher(cipherMode);
+            FileInputStream inputStream = new FileInputStream(inputFile);
+            byte[] inputBytes = new byte[(int) inputFile.length()];
+            inputStream.read(inputBytes);
+            byte[] outputBytes = cipher.doFinal(inputBytes);
+
+            inputStream.close();
+            this.cipher = null;
+
+            return outputBytes;
+        }
+        catch (BadPaddingException
+               | IllegalBlockSizeException ex)
+        {
+            throw new CryptoException("Error encrypting/decrypting file", ex);
+        } catch (IOException ex){
+            throw new RuntimeException(ex);
+        }
+    }
 }
