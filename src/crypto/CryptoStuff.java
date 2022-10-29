@@ -188,23 +188,39 @@ public class CryptoStuff {
     }
 
     public int update(byte[] data, int length) throws CryptoException, IntegrityException {
+        if(cipherMode == Cipher.DECRYPT_MODE) {
+            return decryptionUpdate(data, length);
+        } else {
+            return encryptionUpdate(data, length);
+        }
+    }
+
+    private int decryptionUpdate(byte[] data, int length) throws CryptoException, IntegrityException{
+        int packetLength = length - integrityLength();
+        byte[] code = Arrays.copyOfRange(data, packetLength, length);
+        try {
+            updateHmac(data, packetLength);
+            int postLength = cipher.update(data, 0, packetLength, data);
+            updateHash(data, postLength);
+            checkIntegrity(code);
+            return postLength;
+        } catch (ShortBufferException ex){
+            throw new CryptoException("Error encrypting/decrypting data", ex);
+        }
+    }
+
+    private int encryptionUpdate(byte[] data, int length) throws CryptoException{
         int packetLength = length - integrityLength();
         int consumedNow = ((packetLength+leftover) / cipher.getBlockSize()) * cipher.getBlockSize() - leftover;
         this.leftover = packetLength - consumedNow;
-        byte[] code = Arrays.copyOfRange(data, packetLength, length);
         byte[] leftoverBytes = Arrays.copyOfRange(data, consumedNow, packetLength);
         try {
             updateHash(data, consumedNow);
             int postLength = cipher.update(data, 0, packetLength, data);
             updateHmac(data, postLength);
-            if(cipherMode == Cipher.DECRYPT_MODE) {
-                checkIntegrity(code);
-                return postLength;
-            } else {
-                putIntegrityCode(data, postLength);
-                updateHash(leftoverBytes, leftover);
-                return postLength + integrityLength();
-            }
+            putIntegrityCode(data, postLength);
+            updateHash(leftoverBytes, leftover);
+            return postLength + integrityLength();
         } catch (ShortBufferException ex){
             throw new CryptoException("Error encrypting/decrypting data", ex);
         }
