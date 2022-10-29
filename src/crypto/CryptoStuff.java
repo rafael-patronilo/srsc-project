@@ -194,7 +194,7 @@ public class CryptoStuff {
         byte[] code = Arrays.copyOfRange(data, packetLength, length);
         byte[] leftoverBytes = Arrays.copyOfRange(data, consumedNow, packetLength);
         try {
-            updateHash(data, packetLength);
+            updateHash(data, consumedNow);
             int postLength = cipher.update(data, 0, packetLength, data);
             updateHmac(data, postLength);
             if(cipherMode == Cipher.DECRYPT_MODE) {
