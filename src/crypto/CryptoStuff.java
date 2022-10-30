@@ -41,8 +41,6 @@ public class CryptoStuff {
     private MessageDigest digest;
     private Mac mac;
 
-    private boolean firstUpdate = true;
-
     private byte[] leftoverBytes = new byte[0];
 
     //For use in your TP1 implementation you must have the crytoconfigs
