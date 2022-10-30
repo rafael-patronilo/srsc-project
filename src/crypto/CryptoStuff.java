@@ -41,6 +41,8 @@ public class CryptoStuff {
     private MessageDigest digest;
     private Mac mac;
 
+    private boolean firstUpdate = true;
+
     private byte[] leftoverBytes = new byte[0];
 
     //For use in your TP1 implementation you must have the crytoconfigs
@@ -216,10 +218,7 @@ public class CryptoStuff {
         byte[] newLeftoverBytes = Arrays.copyOfRange(data, consumedNow, length);
 
         // shift the bytes to fit the leftover
-        for (int i = length - 1; i >= 0; i--) {
-            int newI = i + leftoverBytes.length;
-            data[newI] = data[i];
-        }
+        shiftBytes(data, 0, length, leftoverBytes.length);
         copyTo(this.leftoverBytes, 0, data, 0, this.leftoverBytes.length);
         this.leftoverBytes = newLeftoverBytes;
         System.out.println(bytesToHex(leftoverBytes));
@@ -390,6 +389,13 @@ public class CryptoStuff {
     private static void copyTo(byte[] from, int fromOffset, byte[] to, int toOffset, int length){
         for (int i = 0; i < length; i++) {
             to[i + toOffset] = from[i + fromOffset];
+        }
+    }
+
+    private static void shiftBytes(byte[] data, int offset, int length, int shift){
+        for (int i = length - 1; i >= offset; i--) {
+            int newI = i + shift;
+            data[newI] = data[i];
         }
     }
 }
