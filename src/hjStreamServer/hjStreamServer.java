@@ -86,6 +86,7 @@ public class hjStreamServer {
             count += 1;
             g.readFully(buff, 0, size);
             //packetSize = size;
+            System.out.println(CryptoStuff.bytesToHex(buff, 0, 16));
             packetSize = boxCrypto.update(buff, size);
             p.setData(buff, 0, packetSize);
             p.setSocketAddress(addr);

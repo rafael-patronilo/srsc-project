@@ -111,6 +111,7 @@ public class hjBox {
                 decsegments += packetSize;
                 ms += packetSize;
                 System.out.println(inPacket.getLength() + " "  + packetSize);
+                System.out.println(CryptoStuff.bytesToHex(buffer, 0, 16));
                 for (SocketAddress outSocketAddress : outSocketAddressSet) {
                     outSocket.send(new DatagramPacket(buffer, packetSize, outSocketAddress));
                 }
