@@ -41,7 +41,7 @@ public class CryptoStuff {
     private MessageDigest digest;
     private Mac mac;
 
-    private byte[] leftoverBytes;
+    private byte[] leftoverBytes = new byte[0];
 
     //For use in your TP1 implementation you must have the crytoconfigs
     //according to the StreamingServer crypto configs
@@ -213,22 +213,21 @@ public class CryptoStuff {
     private int encryptionUpdate(byte[] data, int length) throws CryptoException{
         int packetSize = ((length+leftoverBytes.length) / cipher.getBlockSize()) * cipher.getBlockSize();
         int consumedNow = packetSize - leftoverBytes.length;
-        
+        byte[] newLeftoverBytes = Arrays.copyOfRange(data, consumedNow, length);
+
+        // shift the bytes to fit the leftover
         for (int i = length - 1; i >= 0; i--) {
             int newI = i + leftoverBytes.length;
+            data[newI] = data[i];
         }
-        copyTo(this.leftoverBytes, 0, packet, 0, this.leftoverBytes.length);
-        
-        int leftover = length - consumedNow;
-        this.leftoverBytes = Arrays.copyOfRange(data, consumedNow, length);
-        
+        copyTo(this.leftoverBytes, 0, data, 0, this.leftoverBytes.length);
+        this.leftoverBytes = newLeftoverBytes;
         System.out.println(bytesToHex(leftoverBytes));
         try {
-            updateHash(data, consumedNow);
-            int postLength = cipher.update(data, 0, length, data);
+            updateHash(data, packetSize);
+            int postLength = cipher.update(data, 0, packetSize, data);
             updateHmac(data, postLength);
             postLength += putIntegrityCode(data, postLength);
-            updateHash(leftoverBytes, leftover);
             return postLength;
         } catch (ShortBufferException ex){
             throw new CryptoException("Error encrypting/decrypting data", ex);
@@ -239,6 +238,7 @@ public class CryptoStuff {
         this.cipher = null;
         this.cipherMode = -1;
         this.digest = null;
+        this.leftoverBytes = new byte[0];
     }
 
     public byte[] endCrypto() throws CryptoException {
