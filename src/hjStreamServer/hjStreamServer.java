@@ -90,7 +90,7 @@ public class hjStreamServer {
             p.setData(buff, 0, packetSize);
             p.setSocketAddress(addr);
             t = System.nanoTime();
-            Thread.sleep(Math.max(0, ((time - q0) - (t - t0)) / 1000000));
+            Thread.sleep(Math.max(0, ((time - q0) - (t - t0)) / 1000000)/*10000*/);
             // send packet (with a frame payload)
             s.send(p);
             System.out.println(size + " " + packetSize);

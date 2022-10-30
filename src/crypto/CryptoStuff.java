@@ -156,12 +156,12 @@ public class CryptoStuff {
     }
 
     public static String bytesToHex(byte[] bytes){
-        return bytesToHex(bytes, bytes.length);
+        return bytesToHex(bytes, 0, bytes.length);
     }
 
-    public static String bytesToHex(byte[] bytes, int length){
+    public static String bytesToHex(byte[] bytes, int offset, int length){
         StringBuilder builder = new StringBuilder(length*2);
-        for (int i = 0; i < length; i++) {
+        for (int i = offset; i < offset + length; i++) {
             builder.append(String.format("%02x", bytes[i]));
         }
         return builder.toString();
@@ -217,9 +217,9 @@ public class CryptoStuff {
             updateHash(data, consumedNow);
             int postLength = cipher.update(data, 0, length, data);
             updateHmac(data, postLength);
-            putIntegrityCode(data, postLength);
+            postLength += putIntegrityCode(data, postLength);
             updateHash(leftoverBytes, leftover);
-            return postLength + integrityLength();
+            return postLength;
         } catch (ShortBufferException ex){
             throw new CryptoException("Error encrypting/decrypting data", ex);
         }
@@ -307,10 +307,10 @@ public class CryptoStuff {
             if (mac != null) {
                 mac.doFinal(buffer, offset);
                 length = mac.getMacLength();
-                mac.reset();
+                System.out.println("HMAC = " + bytesToHex(buffer, offset, length));
             } else if (digest != null) {
                 length = digest.digest(buffer, offset, digest.getDigestLength());
-                digest.reset();
+                System.out.println("HASH = " + bytesToHex(buffer, offset, length));
             }
             return length;
         }

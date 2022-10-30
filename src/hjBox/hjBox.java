@@ -109,13 +109,13 @@ public class hjBox {
             try {
                 packetSize = boxCrypto.update(buffer, inPacket.getLength());
                 decsegments += packetSize;
-                if (packetSize == 0)
-                    break;
-                ms += packetSize; //TODO distinguish between encoded segment and received frame?
+                ms += packetSize;
                 System.out.println(inPacket.getLength() + " "  + packetSize);
                 for (SocketAddress outSocketAddress : outSocketAddressSet) {
                     outSocket.send(new DatagramPacket(buffer, packetSize, outSocketAddress));
                 }
+                if (packetSize == 0)
+                    break;
             } catch (IntegrityException e){
                 System.out.println("Corrupted " + e.getMessage());
                 corruptedframes++;
