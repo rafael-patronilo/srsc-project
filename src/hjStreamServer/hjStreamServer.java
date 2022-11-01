@@ -12,7 +12,6 @@ import crypto.CryptoStuff;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
-import java.io.FileInputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
@@ -87,7 +86,7 @@ public class hjStreamServer {
             g.readFully(buff, 0, size);
             //packetSize = size;
             System.out.println(CryptoStuff.bytesToHex(buff, 0, 16));
-            packetSize = boxCrypto.update(buff, size);
+            packetSize = boxCrypto.handlePacket(buff, size);
             p.setData(buff, 0, packetSize);
             p.setSocketAddress(addr);
             t = System.nanoTime();
@@ -98,12 +97,11 @@ public class hjStreamServer {
             //System.out.print("."); // only for debug
             // comment this for final experiment al observations
         }
-        buff = boxCrypto.endCrypto();
-        if (buff.length > 0) {
-            p.setData(buff, 0, buff.length);
-            p.setSocketAddress(addr);
-            s.send(p);
-        }
+
+        //Send empty packet to signal end of stream
+        p.setData(new byte[0], 0, 0);
+        p.setSocketAddress(addr);
+        s.send(p);
 
         // you must inlude now the call for PrintStats to print the
         // experimental observation of instrumentation variables
@@ -113,7 +111,7 @@ public class hjStreamServer {
         csuite = boxCrypto.getCiphersuite();
         k = boxCrypto.getKey();
         ksize = k.length()*8;
-        hic = ""; //TODO put something here
+        hic = boxCrypto.getIntegrity();
         nf = count;
         etm = (int)((t - t0) / 1_000_000_000L); // seconds
         afs = ms / nf;

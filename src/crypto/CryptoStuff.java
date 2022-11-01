@@ -141,6 +141,10 @@ public class CryptoStuff {
         return ciphersuite;
     }
 
+    public String getIntegrity() {
+        return integrity;
+    }
+
     private static byte[] hexToBytes(String hex) {
         byte[] bytes = new byte[hex.length() / 2 + hex.length() % 2];
         for (int i = 0; i < hex.length() / 2; i++) {
@@ -181,69 +185,47 @@ public class CryptoStuff {
     }
 
     public void startEncryption() throws CryptoException {
-        initCipher(Cipher.ENCRYPT_MODE);
+        this.cipherMode = Cipher.ENCRYPT_MODE;
     }
 
     public void startDecryption() throws CryptoException {
-        initCipher(Cipher.DECRYPT_MODE);
+        this.cipherMode = Cipher.DECRYPT_MODE;
     }
 
-    public int update(byte[] data, int length) throws CryptoException, IntegrityException {
+    public int handlePacket(byte[] data, int length) throws CryptoException, IntegrityException {
+        initCipher(this.cipherMode);
         if(cipherMode == Cipher.DECRYPT_MODE) {
-            return decryptionUpdate(data, length);
+            return decryptPacket(data, length);
         } else {
-            return encryptionUpdate(data, length);
+            return encryptPacket(data, length);
         }
     }
 
-    private int decryptionUpdate(byte[] data, int length) throws CryptoException, IntegrityException{
+    private int decryptPacket(byte[] data, int length) throws CryptoException, IntegrityException{
         int packetLength = length - integrityLength();
         byte[] code = Arrays.copyOfRange(data, packetLength, length);
         try {
             updateHmac(data, packetLength);
-            int postLength = cipher.update(data, 0, packetLength, data);
+            checkHmac(code);
+            int postLength = cipher.doFinal(data, 0, packetLength, data);
             updateHash(data, postLength);
-            checkIntegrity(code);
+            checkHash(code);
             return postLength;
-        } catch (ShortBufferException ex){
+        } catch (AEADBadTagException e){
+            throw new IntegrityException("AEAD Bad Tag");
+        } catch (ShortBufferException | IllegalBlockSizeException | BadPaddingException ex){
             throw new CryptoException("Error encrypting/decrypting data", ex);
         }
     }
 
-    private int encryptionUpdate(byte[] data, int length) throws CryptoException{
-        int packetSize = ((length+leftoverBytes.length) / cipher.getBlockSize()) * cipher.getBlockSize();
-        int consumedNow = packetSize - leftoverBytes.length;
-        byte[] newLeftoverBytes = Arrays.copyOfRange(data, consumedNow, length);
-
-        // shift the bytes to fit the leftover
-        shiftBytes(data, 0, length, leftoverBytes.length);
-        copyTo(this.leftoverBytes, 0, data, 0, this.leftoverBytes.length);
-        this.leftoverBytes = newLeftoverBytes;
-        System.out.println(bytesToHex(leftoverBytes));
+    private int encryptPacket(byte[] data, int length) throws CryptoException{
         try {
-            updateHash(data, packetSize);
-            int postLength = cipher.update(data, 0, packetSize, data);
+            updateHash(data, length);
+            int postLength = cipher.doFinal(data, 0, length, data);
             updateHmac(data, postLength);
             postLength += putIntegrityCode(data, postLength);
             return postLength;
-        } catch (ShortBufferException ex){
-            throw new CryptoException("Error encrypting/decrypting data", ex);
-        }
-    }
-
-    private void clearCipher(){
-        this.cipher = null;
-        this.cipherMode = -1;
-        this.digest = null;
-        this.leftoverBytes = new byte[0];
-    }
-
-    public byte[] endCrypto() throws CryptoException {
-        try {
-            Cipher tmp = this.cipher;
-            clearCipher();
-            return tmp.doFinal();
-        } catch (IllegalBlockSizeException | BadPaddingException ex) {
+        } catch (ShortBufferException | IllegalBlockSizeException | BadPaddingException ex){
             throw new CryptoException("Error encrypting/decrypting data", ex);
         }
     }
@@ -254,7 +236,6 @@ public class CryptoStuff {
         updateHash(data, data.length);
         updateHmac(data, data.length);
         checkIntegrity(hexToBytes(integrityCheck));
-        clearCipher();
         return data;
     }
 
@@ -267,7 +248,6 @@ public class CryptoStuff {
             FileOutputStream outputStream = new FileOutputStream(outFile);
             outputStream.write(outputBytes);
             outputStream.close();
-            clearCipher();
 
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -280,7 +260,6 @@ public class CryptoStuff {
             Key secretKey = new SecretKeySpec(hexToBytes(key), algorithm);
             this.cipher = Cipher.getInstance(this.ciphersuite);
             this.cipher.init(cipherMode, secretKey, ivSpec);
-            this.cipherMode = cipherMode;
             if(this.mackey != null){
                 this.mac = Mac.getInstance(this.integrity);
                 Key macSpec = new SecretKeySpec(hexToBytes(this.mackey), this.integrity);
@@ -299,6 +278,18 @@ public class CryptoStuff {
     private void updateHash(byte[] buffer, int dataLength){
         if(digest != null){
             digest.update(buffer, 0, dataLength);
+        }
+    }
+
+    private void checkHmac(byte[] code) throws IntegrityException{
+        if(mac != null){
+            checkIntegrity(code);
+        }
+    }
+
+    private void checkHash(byte[] code) throws IntegrityException{
+        if(digest != null){
+            checkIntegrity(code);
         }
     }
 

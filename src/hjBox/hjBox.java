@@ -15,14 +15,12 @@ package hjBox;
 import crypto.CryptoStuff;
 import crypto.IntegrityException;
 
-import javax.xml.crypto.Data;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.Set;
@@ -107,7 +105,7 @@ public class hjBox {
             inSocket.receive(inPacket);
             ascsegments += inPacket.getLength();
             try {
-                packetSize = boxCrypto.update(buffer, inPacket.getLength());
+                packetSize = boxCrypto.handlePacket(buffer, inPacket.getLength());
                 decsegments += packetSize;
                 ms += packetSize;
                 System.out.println(inPacket.getLength() + " "  + packetSize);
@@ -127,11 +125,10 @@ public class hjBox {
         // required instrumentation variables for experimental observations
 
         // PrintStats (......)
-        boxCrypto.endCrypto();
         csuite = boxCrypto.getCiphersuite();
         k = boxCrypto.getKey();
         ksize = k.length()*8;
-        hic = ""; //TODO put something here
+        hic = boxCrypto.getIntegrity();
         nf = count - 1; // last packet isn't a frame
         etm = (int)((t - t0) / 1_000_000_000L); // seconds
         afs = ms / nf;
