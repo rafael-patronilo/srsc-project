@@ -1,10 +1,10 @@
-<127.0.0.1:6666>
-ciphersuite: AES/OFB/NoPadding
-key: b356198719e456a6
-iv: 1076ab542789b5f6
-integrity: SHA1
-Mackey: NULL
-</127.0.0.1:6666>
+<127.0.0.1:9999>
+ciphersuite: DES/OFB/NoPadding
+key: 0E329232EA6D0D73
+iv: 8a451982e562c487
+integrity: NULL
+mackey: NULL
+</127.0.0.1:9999>
  
 <193.134.156.23:8945>
 ciphersuite: RC6/GCM/NoPadding
@@ -15,9 +15,9 @@ mackey: NULL
 </193.134.156.23:8945>
 
 <224.7.7.7:7777>
-ciphersuite: AES/OFB/NoPadding
-key: 28472B4B6250655368566D5971337436
-iv: 1076ab542789b5f60bb1791b94e3b6fe
-integrity: SHA1
-Mackey: NULL
+ciphersuite: RC4
+key: 476e67a34e557189476e67a34e557189
+iv: NULL
+integrity: NULL
+mackey: NULL
 </224.7.7.7:7777>
