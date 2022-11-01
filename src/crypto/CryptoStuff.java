@@ -26,7 +26,6 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 public class CryptoStuff {
     static {
         Security.insertProviderAt(new BouncyCastleProvider(), 0);
-        //Security.addProvider(new BouncyCastleProvider());
     }
     private final String key;
     private final String algorithm;
@@ -186,11 +185,11 @@ public class CryptoStuff {
         System.out.println("mackey = " + this.mackey);
     }
 
-    public void startEncryption() throws CryptoException {
+    public void startEncryption() {
         this.cipherMode = Cipher.ENCRYPT_MODE;
     }
 
-    public void startDecryption() throws CryptoException {
+    public void startDecryption() {
         this.cipherMode = Cipher.DECRYPT_MODE;
     }
 
@@ -313,10 +312,8 @@ public class CryptoStuff {
             if (mac != null) {
                 mac.doFinal(buffer, offset);
                 length = mac.getMacLength();
-                System.out.println("HMAC = " + bytesToHex(buffer, offset, length));
             } else if (digest != null) {
                 length = digest.digest(buffer, offset, digest.getDigestLength());
-                System.out.println("HASH = " + bytesToHex(buffer, offset, length));
             }
             return length;
         }

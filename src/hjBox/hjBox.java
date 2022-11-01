@@ -110,15 +110,15 @@ public class hjBox {
                 packetSize = boxCrypto.handlePacket(buffer, inPacket.getLength());
                 decsegments += packetSize;
                 ms += packetSize;
-                System.out.println(inPacket.getLength() + " "  + packetSize);
-                System.out.println(CryptoStuff.bytesToHex(buffer, 0, 16));
+                System.out.print(".");
                 for (SocketAddress outSocketAddress : outSocketAddressSet) {
                     outSocket.send(new DatagramPacket(buffer, packetSize, outSocketAddress));
                 }
             } catch (IntegrityException e){
-                System.out.println("Corrupted " + e.getMessage());
+                System.out.println("\nCorrupted " + e.getMessage());
                 corruptedframes++;
             }
+            System.out.println();
         }
         t = System.nanoTime();
         // call PrintStats to print the obtained statistics from

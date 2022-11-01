@@ -84,8 +84,7 @@ public class hjStreamServer {
             if (count == 0) q0 = time; // ref time encoded
             count += 1;
             g.readFully(buff, 0, size);
-            //packetSize = size;
-            System.out.println(CryptoStuff.bytesToHex(buff, 0, 16));
+            System.out.print(".");
             packetSize = boxCrypto.handlePacket(buff, size);
             p.setData(buff, 0, packetSize);
             p.setSocketAddress(addr);
@@ -93,10 +92,10 @@ public class hjStreamServer {
             Thread.sleep(Math.max(0, ((time - q0) - (t - t0)) / 1000000)/*10000*/);
             // send packet (with a frame payload)
             s.send(p);
-            System.out.println(size + " " + packetSize);
             //System.out.print("."); // only for debug
             // comment this for final experiment al observations
         }
+        System.out.println();
 
         //Send empty packet to signal end of stream
         p.setData(new byte[0], 0, 0);
