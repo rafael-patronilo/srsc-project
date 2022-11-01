@@ -124,7 +124,7 @@ public class CryptoStuff {
             integrity = null;
         if (mackey.equalsIgnoreCase("null"))
             mackey = null;
-        if(mackey != null && integrityCheck == null)
+        if(mackey != null && integrity == null)
             throw new RuntimeException("Mac Key provided but no integrity method specified.");
         if (integrityCheck != null && integrityCheck.equalsIgnoreCase("null"))
             integrityCheck = null;
