@@ -124,6 +124,8 @@ public class CryptoStuff {
             integrity = null;
         if (mackey.equalsIgnoreCase("null"))
             mackey = null;
+        if (iv.equalsIgnoreCase("null"))
+            iv = null;
         if(mackey != null && integrity == null)
             throw new RuntimeException("Mac Key provided but no integrity method specified.");
         if (integrityCheck != null && integrityCheck.equalsIgnoreCase("null"))
@@ -173,7 +175,6 @@ public class CryptoStuff {
     }
 
     public void printProperties() {
-        // TODO remove this
         System.out.println("key = " + this.key);
         System.out.println("algorithm = " + this.algorithm);
         System.out.println("ciphersuite = " + this.ciphersuite);
@@ -256,10 +257,16 @@ public class CryptoStuff {
 
     private void initCipher(int cipherMode) throws CryptoException {
         try{
-            IvParameterSpec ivSpec = new IvParameterSpec(hexToBytes(iv));
+            IvParameterSpec ivSpec = null;
+            if(iv != null){
+                ivSpec = new IvParameterSpec(hexToBytes(iv));
+            }
             Key secretKey = new SecretKeySpec(hexToBytes(key), algorithm);
             this.cipher = Cipher.getInstance(this.ciphersuite);
-            this.cipher.init(cipherMode, secretKey, ivSpec);
+            if(ivSpec != null)
+                this.cipher.init(cipherMode, secretKey, ivSpec);
+            else
+                this.cipher.init(cipherMode, secretKey);
             if(this.mackey != null){
                 this.mac = Mac.getInstance(this.integrity);
                 Key macSpec = new SecretKeySpec(hexToBytes(this.mackey), this.integrity);

@@ -20,9 +20,9 @@ public class hjStreamServer {
 
     static public void main(String[] args) throws Exception {
 
-        if (args.length != 4) {
-            System.out.println("Use: hjStreamServer <movie> <ip-multicast-address> <port> <box-ip>");
-            System.out.println("or: hjStreamServer <movie> <ip-unicast-address> <port> <box-ip>");
+        if (args.length != 3) {
+            System.out.println("Use: hjStreamServer <movie> <ip-multicast-address> <port>");
+            System.out.println("or: hjStreamServer <movie> <ip-unicast-address> <port>");
             System.exit(-1);
         }
 
@@ -46,7 +46,7 @@ public class hjStreamServer {
         int frate;  // observed frame rate in segments/sec)
         int tput;   // observed throughput (in Kbytes/sec)
 
-        String box = args[3];
+        String box = args[1] + ":" + args[2];
         String[] moviePath = args[0].split("/");
         movie = moviePath[moviePath.length - 1];
 
