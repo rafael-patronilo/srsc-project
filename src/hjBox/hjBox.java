@@ -103,6 +103,8 @@ public class hjBox {
             count++;
             DatagramPacket inPacket = new DatagramPacket(buffer, buffer.length);
             inSocket.receive(inPacket);
+            if(inPacket.getLength()==0)
+                break;
             ascsegments += inPacket.getLength();
             try {
                 packetSize = boxCrypto.handlePacket(buffer, inPacket.getLength());
@@ -113,8 +115,6 @@ public class hjBox {
                 for (SocketAddress outSocketAddress : outSocketAddressSet) {
                     outSocket.send(new DatagramPacket(buffer, packetSize, outSocketAddress));
                 }
-                if (packetSize == 0)
-                    break;
             } catch (IntegrityException e){
                 System.out.println("Corrupted " + e.getMessage());
                 corruptedframes++;
