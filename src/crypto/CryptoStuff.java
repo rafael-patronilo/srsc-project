@@ -24,8 +24,9 @@ import java.security.MessageDigest;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 public class CryptoStuff {
+    private static BouncyCastleProvider bouncyCastle = new BouncyCastleProvider();
     static {
-        Security.insertProviderAt(new BouncyCastleProvider(), 0);
+        Security.insertProviderAt(bouncyCastle, 0);
     }
     private final String key;
     private final String algorithm;
@@ -268,7 +269,7 @@ public class CryptoStuff {
             else
                 this.cipher.init(cipherMode, secretKey);
             if(this.mackey != null){
-                this.mac = Mac.getInstance(this.integrity);
+                this.mac = Mac.getInstance(this.integrity, bouncyCastle);
                 Key macSpec = new SecretKeySpec(hexToBytes(this.mackey), this.integrity);
                 this.mac.init(macSpec);
             }
