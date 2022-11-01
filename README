@@ -1,0 +1,3 @@
+To compile and run, it is required to include the bouncy castle in the classpath, if not already.
+In linux this can be done using "export CLASSPATH=".:PATH_TO_JAR/bcprov.jar" before javac and java commands.
+The project was built with IntelliJ on linux.
