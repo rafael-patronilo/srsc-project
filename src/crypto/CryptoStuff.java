@@ -18,6 +18,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.*;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.security.MessageDigest;
@@ -70,15 +71,24 @@ public class CryptoStuff {
         List<String> lines = Files.readAllLines(Paths.get(path));
         String blockHeader = String.format("<%s>", entry);
         String blockFooter = String.format("</%s>", entry);
-        String ciphersuite = null, key = null, iv = null, integrity = null, mackey = null, integrityCheck = null;
         int i = 0;
-        // skip until start of block
         while (!lines.get(i).trim().equals(blockHeader)) i++;
         i++;
-        while (!lines.get(i).trim().equals(blockFooter)) {
-            if (lines.get(i).isBlank())
+        List<String> entryLines = new ArrayList<>(lines.size() - i);
+        while (!lines.get(i).trim().equals(blockFooter)){
+            entryLines.add(lines.get(i));
+            i++;
+        }
+        return parseConfig(entryLines);
+    }
+
+    private static CryptoStuff parseConfig(List<String> lines){
+        String ciphersuite = null, key = null, iv = null, integrity = null, mackey = null, integrityCheck = null;
+
+        for (String line : lines){
+            if (line.isBlank())
                 continue;
-            String[] parts = lines.get(i).split(":");
+            String[] parts = line.split(":");
             parts[0] = parts[0].trim().toLowerCase();
             parts[1] = parts[1].trim();
             switch (parts[0]) {
@@ -112,11 +122,9 @@ public class CryptoStuff {
                         throw new RuntimeException("Invalid configuration: Repeated property " + parts[0]);
                     mackey = parts[1];
                 }
-                default -> {
-                    throw new RuntimeException("Invalid configuration: Unknown property " + parts[0]);
-                }
+                default -> throw new RuntimeException("Invalid configuration: Unknown property " + parts[0]);
+
             }
-            i++;
         }
         if (ciphersuite == null || key == null || iv == null || integrity == null || mackey == null) {
             throw new RuntimeException("Invalid configuration: Missing properties");
