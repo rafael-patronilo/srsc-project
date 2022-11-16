@@ -29,12 +29,12 @@ public class CryptoStuff {
     static {
         Security.insertProviderAt(bouncyCastle, 0);
     }
-    private final String key;
+    private String key;
     private final String algorithm;
     private final String ciphersuite;
     private final String iv;
     private final String integrity;
-    private final String mackey;
+    private String mackey;
 
     private final String integrityCheck;
 
@@ -82,7 +82,7 @@ public class CryptoStuff {
         return parseConfig(entryLines);
     }
 
-    private static CryptoStuff parseConfig(List<String> lines){
+    static CryptoStuff parseConfig(List<String> lines){
         String ciphersuite = null, key = null, iv = null, integrity = null, mackey = null, integrityCheck = null;
 
         for (String line : lines){
@@ -148,6 +148,10 @@ public class CryptoStuff {
         return key;
     }
 
+    void setKey(String key) {
+        this.key = key;
+    }
+
     public String getCiphersuite() {
         return ciphersuite;
     }
@@ -156,7 +160,15 @@ public class CryptoStuff {
         return integrity;
     }
 
-    private static byte[] hexToBytes(String hex) {
+    public String getMackey() {
+        return mackey;
+    }
+
+    public void setMackey(String mackey) {
+        this.mackey = key;
+    }
+
+    public static byte[] hexToBytes(String hex) {
         byte[] bytes = new byte[hex.length() / 2 + hex.length() % 2];
         for (int i = 0; i < hex.length() / 2; i++) {
             char c0 = hex.charAt(i * 2);
