@@ -1,6 +1,7 @@
 package crypto;
 
 import java.util.List;
+import java.util.Objects;
 
 public class Ciphersuite {
     private final String scheme;
@@ -18,6 +19,7 @@ public class Ciphersuite {
             if(i >= lines.size() || lines.get(i).isBlank())
                 break;
             String line = lines.get(i);
+            //System.out.println(line);
             String[] parts = line.split(":");
             parts[0] = parts[0].trim().toLowerCase();
             parts[1] = parts[1].trim();
@@ -49,5 +51,18 @@ public class Ciphersuite {
     public String toString(){
         return String.format("scheme:%s\nintegrity-check:%s\n",
                 scheme, integrityCheck == null ? "NULL" : integrityCheck);
+    }
+
+    @Override
+    public boolean equals(Object other){
+        if(other instanceof Ciphersuite otherS){
+            return Objects.equals(otherS.integrityCheck, this.integrityCheck) &&
+                    Objects.equals(otherS.scheme, this.scheme);
+        } else return false;
+    }
+
+    @Override
+    public int hashCode(){
+        return Objects.hash(this.integrityCheck, this.scheme);
     }
 }

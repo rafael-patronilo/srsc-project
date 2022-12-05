@@ -13,9 +13,12 @@ package hjBox;
  */
 
 import crypto.CryptoStuff;
+import crypto.Handshake;
 import crypto.IntegrityException;
 
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -42,6 +45,24 @@ public class hjBox {
             System.err.println("Configuration file not found!");
             System.exit(1);
         }
+
+        Handshake cHandshake = Handshake.load("hjBox/hjbox1.cer", "hjBox/configs/supported");
+        Handshake sHandshake = Handshake.load("hjBox/hjbox1.cer", "hjBox/configs/supported");
+        try{
+            FileOutputStream streamCHello = new FileOutputStream("client_hello.txt");
+            FileOutputStream streamSHello = new FileOutputStream("server_hello.txt");
+
+            byte[] cHello = cHandshake.generateClientHello();
+            streamCHello.write(cHello);
+            byte[] sHello = sHandshake.respondClientHello(cHello);
+            streamSHello.write(sHello);
+
+            streamCHello.close();
+            streamSHello.close();
+        } catch (IOException e){
+            throw new RuntimeException(e);
+        }
+
         Properties properties = new Properties();
         properties.load(inputStream);
         String remote = properties.getProperty("remote");

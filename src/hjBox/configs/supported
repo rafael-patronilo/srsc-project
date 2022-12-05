@@ -1,0 +1,13 @@
+HANDSHAKE
+scheme: SHA256withRSA
+integrity-check: NULL
+
+scheme: SHA256withRSA/PSS
+integrity-check: NULL
+
+SESSION
+scheme: AES-128/GCM/NoPadding
+integrity-check: HMAC-SHA256
+
+scheme: AES-128/CCM/NoPadding
+integrity-check: HMAC-SHA256

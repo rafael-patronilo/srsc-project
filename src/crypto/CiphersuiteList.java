@@ -9,15 +9,23 @@ public class CiphersuiteList {
     private List<Ciphersuite> handshake = new ArrayList<>();
     private List<Ciphersuite> session = new ArrayList<>();
 
+    public void addSession(Ciphersuite suite){
+        session.add(suite);
+    }
+
+    public void addHandshake(Ciphersuite suite){
+        handshake.add(suite);
+    }
+
     private static int skipBlankLines(List<String> lines, int i){
         int x = 0;
-        while (i < lines.size() && lines.get(i + x).isBlank()) x++;
+        while (i + x < lines.size() && lines.get(i + x).isBlank()) x++;
         return x;
     }
 
     private static int skipNonBlankLines(List<String> lines, int i){
         int x = 0;
-        while (i < lines.size() && !lines.get(i + x).isBlank()) x++;
+        while (i + x < lines.size() && !lines.get(i + x).isBlank()) x++;
         return x;
     }
 
@@ -35,6 +43,8 @@ public class CiphersuiteList {
             i += skipNonBlankLines(lines, i);
             i += skipBlankLines(lines, i);
         }
+        i++;
+        i += skipBlankLines(lines, i);
         if(i >= lines.size()){
             throw new CryptoException("Invalid Ciphersuite list: Couldn't find Session header");
         }
@@ -46,17 +56,39 @@ public class CiphersuiteList {
         return list;
     }
 
+    public Ciphersuite findFirstSession(CiphersuiteList other){
+        for (Ciphersuite suite : this.session){
+            if(other.session.contains(suite)){
+                return suite;
+            }
+        }
+        return null;
+    }
+
+    public Ciphersuite findFirstHandshake(CiphersuiteList other){
+        for (Ciphersuite suite : this.handshake){
+            if(other.handshake.contains(suite)){
+                return suite;
+            }
+        }
+        return null;
+    }
+
     @Override
-    public String toString(){
+    public String toString() {
+        return this.stringBuilder().toString();
+    }
+
+    public StringBuilder stringBuilder(){
         StringBuilder builder = new StringBuilder();
-        builder.append(HANDSHAKE_HEADER);
-        for (Ciphersuite suite : handshake){
-            builder.append(suite.toString());
+        builder.append(HANDSHAKE_HEADER).append("\n");
+        for (Ciphersuite suite : handshake) {
+            builder.append(suite.toString()).append("\n");
         }
-        builder.append(SESSION_HEADER);
-        for (Ciphersuite suite : session){
-            builder.append(suite.toString());
+        builder.append(SESSION_HEADER).append("\n");
+        for (Ciphersuite suite : session) {
+            builder.append(suite.toString()).append("\n");
         }
-        return builder.toString();
+        return builder;
     }
 }
