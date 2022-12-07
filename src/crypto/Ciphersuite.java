@@ -12,6 +12,14 @@ public class Ciphersuite {
         this.integrityCheck = integrityCheck;
     }
 
+    public String getScheme() {
+        return scheme;
+    }
+
+    public String getIntegrityCheck() {
+        return integrityCheck;
+    }
+
     static Ciphersuite parseConfig(List<String> lines, int start) throws CryptoException{
         String scheme = null, integrityCheck = null;
 

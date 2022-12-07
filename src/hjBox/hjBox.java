@@ -31,6 +31,8 @@ import java.util.stream.Collectors;
 
 public class hjBox {
 
+    public static final String PASSWORD = "256050b592b5242d4f01c7287ece0482";
+
     private static InetSocketAddress parseSocketAddress(String socketAddress) {
         String[] split = socketAddress.split(":");
         String host = split[0];
@@ -46,19 +48,26 @@ public class hjBox {
             System.exit(1);
         }
 
-        Handshake cHandshake = Handshake.load("hjBox/hjbox1.cer", "hjBox/configs/supported");
-        Handshake sHandshake = Handshake.load("hjBox/hjbox1.cer", "hjBox/configs/supported");
+        Handshake cHandshake = Handshake.load("hjBox/hjbox1.cer",
+                "hjBox/configs/supported", "hjBox/box.jks", PASSWORD);
+        Handshake sHandshake = Handshake.load("hjBox/hjbox1.cer",
+                "hjBox/configs/supported", "hjBox/box.jks", PASSWORD);
         try{
             FileOutputStream streamCHello = new FileOutputStream("client_hello.txt");
             FileOutputStream streamSHello = new FileOutputStream("server_hello.txt");
+            FileOutputStream streamConfirm = new FileOutputStream("client_confirm.txt");
 
             byte[] cHello = cHandshake.generateClientHello();
             streamCHello.write(cHello);
             byte[] sHello = sHandshake.respondClientHello(cHello);
             streamSHello.write(sHello);
+            byte[] confirm = cHandshake.respondServerHello(sHello);
+            streamConfirm.write(confirm);
+            sHandshake.receiveClientConfirmation(confirm);
 
             streamCHello.close();
             streamSHello.close();
+            streamConfirm.close();
         } catch (IOException e){
             throw new RuntimeException(e);
         }

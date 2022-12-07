@@ -29,6 +29,14 @@ public class CiphersuiteList {
         return x;
     }
 
+    public Ciphersuite getSession(int index){
+        return session.get(index);
+    }
+
+    public Ciphersuite getHandshake(int index){
+        return handshake.get(index);
+    }
+
     public static CiphersuiteList parse(List<String> lines) throws CryptoException {
         CiphersuiteList list = new CiphersuiteList();
         int i = 0;
