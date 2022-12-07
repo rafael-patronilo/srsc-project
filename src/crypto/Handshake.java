@@ -1,8 +1,12 @@
 package crypto;
 
 import javax.crypto.KeyAgreement;
+import javax.xml.crypto.Data;
 import java.io.*;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
 import java.net.SocketAddress;
+import java.net.SocketException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.*;
@@ -45,6 +49,8 @@ public class Handshake {
     private static final String SIGNATURE_FIELD = "Signature";
 
     private static final String DELAYED_SIGNATURE_FIELD = "Delayed-" + SIGNATURE_FIELD;
+
+    private static final String ERROR = "ERROR";
 
     private final CiphersuiteList supported;
 
@@ -104,12 +110,59 @@ public class Handshake {
         this.password = password;
     }
 
-    public CryptoStuff listenForHandshake(SocketAddress incoming, SocketAddress outgoing) throws CryptoException{
+    public CryptoStuff listenForHandshake(byte[] buffer, SocketAddress inAddress) throws CryptoException, IntegrityException{
+        boolean externalError = false;
+        try {
+            DatagramSocket incoming = new DatagramSocket(inAddress);
+
+            DatagramPacket clientHelloPacket = new DatagramPacket(buffer, buffer.length);
+            incoming.receive(clientHelloPacket);
+            String error = isError(buffer, clientHelloPacket.getLength());
+            if(error != null){
+                externalError = true;
+                throw new CryptoException(error);
+            }
+            byte[] serverHello = respondClientHello(buffer, clientHelloPacket.getLength());
+
+            DatagramSocket outgoing = new DatagramSocket(clientHelloPacket.getSocketAddress());
+            DatagramPacket serverHelloPacket = new DatagramPacket(serverHello, serverHello.length);
+            outgoing.send(serverHelloPacket);
+
+            DatagramPacket clientConfirmation = new DatagramPacket(buffer, buffer.length);
+            incoming.receive(clientConfirmation);
+            error = isError(buffer, clientHelloPacket.getLength());
+            if(error != null){
+                externalError = true;
+                throw new CryptoException(error);
+            }
+            receiveClientConfirmation(buffer, clientConfirmation.getLength());
+
+            incoming.close();
+            outgoing.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (IntegrityException | CryptoException e){
+
+        }
+    }
+
+    public CryptoStuff sendHandshake(SocketAddress inAddress, SocketAddress outAddress)  throws CryptoException{
         return null; //TODO implement
     }
 
-    public CryptoStuff sendHandshake(SocketAddress incoming, SocketAddress outgoing)  throws CryptoException{
-        return null; //TODO implement
+    private String isError(byte[] packet, int length){
+        Scanner scanner = new Scanner(new ByteArrayInputStream(packet, 0, length));
+        if(!scanner.nextLine().equalsIgnoreCase(ERROR)){
+            return null;
+        } else{
+            return scanner.nextLine();
+        }
+    }
+
+    private byte[] generateErrorPacket(Exception exception){
+        String builder = ERROR + "\n" +
+                exception.getMessage();
+        return builder.getBytes();
     }
 
     private void verifySignature(byte[] data, String signatureHex)
@@ -245,9 +298,13 @@ public class Handshake {
         return this.clientHello;
     }
 
-    public byte[] respondClientHello(byte[] clientHello) throws CryptoException{
+    public byte[] respondClientHello(byte[] clientHello) throws CryptoException {
+        return respondClientHello(clientHello, clientHello.length);
+    }
+
+    public byte[] respondClientHello(byte[] clientHello, int length) throws CryptoException{
         this.clientHello = clientHello;
-        Scanner scanner = new Scanner(new ByteArrayInputStream(clientHello));
+        Scanner scanner = new Scanner(new ByteArrayInputStream(clientHello, 0, length));
         if(!scanner.nextLine().trim().equalsIgnoreCase(CLIENT_HELLO)){
             throw new CryptoException("Not a client hello");
         }
@@ -368,7 +425,11 @@ public class Handshake {
     }
 
     public void receiveClientConfirmation(byte[] clientConfirmation) throws CryptoException, IntegrityException{
-        Scanner scanner = new Scanner(new ByteArrayInputStream(clientConfirmation));
+        receiveClientConfirmation(clientConfirmation, clientConfirmation.length);
+    }
+
+    public void receiveClientConfirmation(byte[] clientConfirmation, int length) throws CryptoException, IntegrityException{
+        Scanner scanner = new Scanner(new ByteArrayInputStream(clientConfirmation, 0, length));
         String delayedSignature = expectField(scanner, DELAYED_SIGNATURE_FIELD);
         verifySignature(clientHello, delayedSignature);
         checkChallenge(scanner);
