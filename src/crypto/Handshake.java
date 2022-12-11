@@ -1,18 +1,14 @@
 package crypto;
 
-import javax.crypto.KeyAgreement;
-import javax.xml.crypto.Data;
+import javax.crypto.*;
 import java.io.*;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketAddress;
-import java.net.SocketException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.*;
-import java.security.cert.CertificateException;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
+import java.security.cert.*;
 import java.security.spec.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +47,7 @@ public class Handshake {
     private static final String DELAYED_SIGNATURE_FIELD = "Delayed-" + SIGNATURE_FIELD;
 
     private static final String ERROR = "ERROR";
+    public static final String PIGGYBACK = "Piggyback";
 
     private final CiphersuiteList supported;
 
@@ -70,6 +67,8 @@ public class Handshake {
     private byte[] dhSecret = null;
 
     private byte[] clientHello;
+
+    private CryptoStuff generatedCrypto = null;
 
     private KeyStore keyStore;
 
@@ -110,8 +109,10 @@ public class Handshake {
         this.password = password;
     }
 
-    public CryptoStuff listenForHandshake(byte[] buffer, SocketAddress inAddress) throws CryptoException, IntegrityException{
+    public int listenForHandshake(byte[] buffer, SocketAddress inAddress)
+            throws CryptoException, IntegrityException{
         boolean externalError = false;
+        DatagramSocket outgoing = null;
         try {
             DatagramSocket incoming = new DatagramSocket(inAddress);
 
@@ -124,30 +125,115 @@ public class Handshake {
             }
             byte[] serverHello = respondClientHello(buffer, clientHelloPacket.getLength());
 
-            DatagramSocket outgoing = new DatagramSocket(clientHelloPacket.getSocketAddress());
+            outgoing = new DatagramSocket(clientHelloPacket.getSocketAddress());
             DatagramPacket serverHelloPacket = new DatagramPacket(serverHello, serverHello.length);
             outgoing.send(serverHelloPacket);
 
-            DatagramPacket clientConfirmation = new DatagramPacket(buffer, buffer.length);
-            incoming.receive(clientConfirmation);
+            DatagramPacket clientConfirmationPacket = new DatagramPacket(buffer, buffer.length);
+            incoming.receive(clientConfirmationPacket);
             error = isError(buffer, clientHelloPacket.getLength());
             if(error != null){
                 externalError = true;
                 throw new CryptoException(error);
             }
-            receiveClientConfirmation(buffer, clientConfirmation.getLength());
+            int read = receiveClientConfirmation(buffer, clientConfirmationPacket.getLength(), buffer);
+
+            incoming.close();
+            outgoing.close();
+            return read;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (IntegrityException | CryptoException e){
+            if(outgoing != null && !externalError){
+                byte[] errorPacket = generateErrorPacket(e);
+                DatagramPacket error = new DatagramPacket(errorPacket, errorPacket.length);
+                try {
+                    outgoing.send(error);
+                } catch (IOException e2){
+                    throw new RuntimeException(e2);
+                }
+            }
+            throw e;
+        }
+    }
+
+    public void sendHandshake(byte[] buffer, SocketAddress inAddress, SocketAddress outAddress,
+                                     byte[] piggyback, int piggybackLength)
+            throws CryptoException, IntegrityException{
+        boolean externalError = false;
+        DatagramSocket outgoing = null;
+        try {
+            DatagramSocket incoming = new DatagramSocket(inAddress);
+            outgoing = new DatagramSocket(outAddress);
+
+            byte[] clientHello = generateClientHello();
+            DatagramPacket clientHelloPacket = new DatagramPacket(clientHello, clientHello.length);
+            outgoing.send(clientHelloPacket);
+
+            DatagramPacket serverHelloPacket = new DatagramPacket(buffer, buffer.length);
+            incoming.receive(serverHelloPacket);
+            String error = isError(buffer, serverHelloPacket.getLength());
+            if(error != null){
+                externalError = true;
+                throw new CryptoException(error);
+            }
+
+            byte[] clientConfirmation = respondServerHello(buffer, serverHelloPacket.getLength(),
+                    piggyback, piggybackLength);
+            DatagramPacket clientConfirmationPacket = new DatagramPacket(clientConfirmation,
+                    clientConfirmation.length);
+            outgoing.send(clientConfirmationPacket);
 
             incoming.close();
             outgoing.close();
         } catch (IOException e) {
             throw new RuntimeException(e);
         } catch (IntegrityException | CryptoException e){
-
+            if(!externalError){
+                byte[] errorPacket = generateErrorPacket(e);
+                DatagramPacket error = new DatagramPacket(errorPacket, errorPacket.length);
+                try {
+                    outgoing.send(error);
+                } catch (IOException e2){
+                    throw new RuntimeException(e2);
+                }
+            }
+            throw e;
         }
     }
 
-    public CryptoStuff sendHandshake(SocketAddress inAddress, SocketAddress outAddress)  throws CryptoException{
-        return null; //TODO implement
+    private void produceCrypto() throws CryptoException {
+        boolean isMac;
+        try {
+            Mac.getInstance(sessionCS.getIntegrityCheck());
+            isMac = true;
+        } catch (NoSuchAlgorithmException e) {
+            isMac = false;
+        }
+        SecureRandom secureRandom = new SecureRandom();
+        secureRandom.setSeed(dhSecret);
+        try{
+            KeyGenerator keyGenerator = KeyGenerator.getInstance(sessionCS.getScheme());
+            keyGenerator.init(secureRandom);
+            String key = bytesToHex(keyGenerator.generateKey().getEncoded());
+            String macKey = null;
+            if(isMac){
+                KeyGenerator macGenerator = KeyGenerator.getInstance(sessionCS.getIntegrityCheck());
+                macGenerator.init(secureRandom);
+                macKey = bytesToHex(macGenerator.generateKey().getEncoded());
+            }
+            String algorithm = sessionCS.getScheme().split("/")[0];
+            byte[] ivBytes = new byte[Cipher.getInstance(sessionCS.getScheme()).getBlockSize()];
+            secureRandom.nextBytes(ivBytes);
+            generatedCrypto = new CryptoStuff(key, algorithm, sessionCS.getScheme(), bytesToHex(ivBytes),
+                    null, macKey, sessionCS.getIntegrityCheck());
+        } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
+            throw new CryptoException("Key generation failed", e);
+        }
+    }
+
+    public CryptoStuff getGeneratedCrypto(){
+        return generatedCrypto;
     }
 
     private String isError(byte[] packet, int length){
@@ -258,7 +344,7 @@ public class Handshake {
         }
     }
 
-    private void readPeerCertificate(Scanner scanner) throws CryptoException{
+    private void readPeerCertificate(Scanner scanner) throws CryptoException, IntegrityException{
         StringBuilder cert = new StringBuilder();
         String line = scanner.nextLine();
         if(!line.trim().equalsIgnoreCase(CERTIFICATE_HEADER)){
@@ -274,13 +360,17 @@ public class Handshake {
             byte[] b = cert.toString().getBytes();
             InputStream stream = new ByteArrayInputStream(b);
             this.peerCertificate = (X509Certificate) cf.generateCertificate(stream);
+            peerCertificate.checkValidity();
+            
             //TODO check if trusted
+        } catch (CertificateExpiredException | CertificateNotYetValidException e){
+            throw new IntegrityException("Untrusted certificate", e);
         } catch (CertificateException e) {
             throw new CryptoException("Invalid certificate", e);
         }
     }
 
-    public byte[] generateClientHello(){
+    public byte[] generateClientHello() {
         StringBuilder builder = new StringBuilder();
         builder.append(CLIENT_HELLO).append("\n");
         builder.append(NEGOTIATION_HEADER).append("\n");
@@ -298,11 +388,11 @@ public class Handshake {
         return this.clientHello;
     }
 
-    public byte[] respondClientHello(byte[] clientHello) throws CryptoException {
+    public byte[] respondClientHello(byte[] clientHello) throws CryptoException, IntegrityException {
         return respondClientHello(clientHello, clientHello.length);
     }
 
-    public byte[] respondClientHello(byte[] clientHello, int length) throws CryptoException{
+    public byte[] respondClientHello(byte[] clientHello, int length) throws CryptoException, IntegrityException{
         this.clientHello = clientHello;
         Scanner scanner = new Scanner(new ByteArrayInputStream(clientHello, 0, length));
         if(!scanner.nextLine().trim().equalsIgnoreCase(CLIENT_HELLO)){
@@ -355,8 +445,12 @@ public class Handshake {
         return builder.toString().getBytes();
     }
 
-    public byte[] respondServerHello(byte[] serverHello) throws CryptoException, IntegrityException{
-        Scanner scanner = new Scanner(new ByteArrayInputStream(serverHello));
+    public byte[] respondServerHello(byte[] serverHello, byte[] piggyback, int piggybackLength) throws CryptoException, IntegrityException{
+        return respondServerHello(serverHello, serverHello.length, piggyback, piggybackLength);
+    }
+
+    public byte[] respondServerHello(byte[] serverHello, int length, byte[] piggyback, int piggybackLength) throws CryptoException, IntegrityException{
+        Scanner scanner = new Scanner(new ByteArrayInputStream(serverHello, 0, length));
 
         if(!scanner.nextLine().trim().equalsIgnoreCase(SERVER_HELLO)){
             throw new CryptoException("Not a client hello");
@@ -384,7 +478,7 @@ public class Handshake {
         String signature = expectField(scanner, SIGNATURE_FIELD);
         verifySignature(readUpToSignature(serverHello), signature);
 
-        return generateClientConfirmation(serverTimestamp, serverNonce);
+        return generateClientConfirmation(serverTimestamp, serverNonce, piggyback, piggybackLength);
     }
 
     private void checkChallenge(Scanner scanner) throws CryptoException {
@@ -412,28 +506,44 @@ public class Handshake {
         return toVerify.toString().getBytes();
     }
 
-    private byte[] generateClientConfirmation(String serverTimestamp, String serverNonce) throws CryptoException{
+    private byte[] generateClientConfirmation(String serverTimestamp, String serverNonce, byte[] piggyback,
+                                              int piggybackLength) throws CryptoException{
         StringBuilder builder = new StringBuilder();
+        produceCrypto();
 
         String delayedSignature = generateSignature(clientHello, hanshakeCS.getScheme());
         appendField(builder, DELAYED_SIGNATURE_FIELD, delayedSignature);
 
         appendField(builder, RETURN_TIMESTAMP_FIELD, serverTimestamp);
         appendField(builder, RETURN_NONCE_FIELD, serverNonce);
+        generatedCrypto.startEncryption();
+        try {
+            piggybackLength = generatedCrypto.handlePacket(piggyback, piggybackLength);
+        } catch (IntegrityException e){
+            throw new CryptoException("Unexpected integrity failure while encrypting");
+        }
+        appendField(builder, PIGGYBACK, bytesToHex(piggyback, 0, piggybackLength));
         sign(builder, hanshakeCS.getScheme());
         return builder.toString().getBytes();
     }
 
-    public void receiveClientConfirmation(byte[] clientConfirmation) throws CryptoException, IntegrityException{
-        receiveClientConfirmation(clientConfirmation, clientConfirmation.length);
+    public void receiveClientConfirmation(byte[] clientConfirmation, byte[] buffer) throws CryptoException, IntegrityException{
+        receiveClientConfirmation(clientConfirmation, clientConfirmation.length, buffer);
     }
 
-    public void receiveClientConfirmation(byte[] clientConfirmation, int length) throws CryptoException, IntegrityException{
+    public int receiveClientConfirmation(byte[] clientConfirmation, int length, byte[] buffer) throws CryptoException, IntegrityException{
         Scanner scanner = new Scanner(new ByteArrayInputStream(clientConfirmation, 0, length));
         String delayedSignature = expectField(scanner, DELAYED_SIGNATURE_FIELD);
         verifySignature(clientHello, delayedSignature);
         checkChallenge(scanner);
+        String piggyback = expectField(scanner, PIGGYBACK);
         String signature = expectField(scanner, SIGNATURE_FIELD);
         verifySignature(readUpToSignature(clientConfirmation), signature);
+        produceCrypto();
+
+        generatedCrypto.startDecryption();
+        byte[] piggybackedBytes = hexToBytes(piggyback);
+        System.arraycopy(piggybackedBytes, 0, buffer, 0, piggybackedBytes.length);
+        return generatedCrypto.handlePacket(buffer, piggybackedBytes.length);
     }
 }

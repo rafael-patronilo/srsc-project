@@ -276,6 +276,10 @@ public class CryptoStuff {
         }
     }
 
+    public int getBlockSize(){
+        return cipher.getBlockSize();
+    }
+
     private void initCipher(int cipherMode) throws CryptoException {
         try{
             IvParameterSpec ivSpec = null;

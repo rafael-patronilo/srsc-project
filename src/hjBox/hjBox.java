@@ -48,29 +48,9 @@ public class hjBox {
             System.exit(1);
         }
 
-        Handshake cHandshake = Handshake.load("hjBox/hjbox1.cer",
+        Handshake handshake = Handshake.load("hjBox/hjbox1.cer",
                 "hjBox/configs/supported", "hjBox/box.jks", PASSWORD);
-        Handshake sHandshake = Handshake.load("hjBox/hjbox1.cer",
-                "hjBox/configs/supported", "hjBox/box.jks", PASSWORD);
-        try{
-            FileOutputStream streamCHello = new FileOutputStream("client_hello.txt");
-            FileOutputStream streamSHello = new FileOutputStream("server_hello.txt");
-            FileOutputStream streamConfirm = new FileOutputStream("client_confirm.txt");
 
-            byte[] cHello = cHandshake.generateClientHello();
-            streamCHello.write(cHello);
-            byte[] sHello = sHandshake.respondClientHello(cHello);
-            streamSHello.write(sHello);
-            byte[] confirm = cHandshake.respondServerHello(sHello);
-            streamConfirm.write(confirm);
-            sHandshake.receiveClientConfirmation(confirm);
-
-            streamCHello.close();
-            streamSHello.close();
-            streamConfirm.close();
-        } catch (IOException e){
-            throw new RuntimeException(e);
-        }
 
         Properties properties = new Properties();
         properties.load(inputStream);
