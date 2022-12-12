@@ -1,6 +1,9 @@
 package crypto;
 
 import javax.crypto.*;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
 import java.io.*;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -9,10 +12,9 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.*;
 import java.security.cert.*;
+import java.security.cert.Certificate;
 import java.security.spec.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
 import java.security.KeyStore;
 
 import static crypto.CryptoStuff.bytesToHex;
@@ -49,12 +51,12 @@ public class Handshake {
     private static final String ERROR = "ERROR";
     public static final String PIGGYBACK = "Piggyback";
 
+    public static final String CHAIN_BEGIN = "-----BEGIN CERTIFICATE-----";
+    public static final String CHAIN_END = "-----END CERTIFICATE-----";
     private final CiphersuiteList supported;
 
-    private final X509Certificate myCertificate;
-
-    private final String myCertificateEncoded;
-    private X509Certificate peerCertificate = null;
+    private final Map<String, X509Certificate[]> myCertificates;
+    private X509Certificate[] peerCertificate = null;
 
     private String myTimestamp = null, myNonce = null;
 
@@ -62,7 +64,7 @@ public class Handshake {
     private PublicKey dhPublic = null;
 
     private Ciphersuite sessionCS = null;
-    private Ciphersuite hanshakeCS = null;
+    private Ciphersuite handshakeCS = null;
 
     private byte[] dhSecret = null;
 
@@ -74,37 +76,41 @@ public class Handshake {
 
     private String password;
 
-    public static Handshake load(String certificatePath, String supportedPath,
+    public static Handshake load(String supportedPath,
                                  String keystorePath, String password) throws CryptoException {
         CiphersuiteList supported;
-        X509Certificate certificate;
-        InputStream certificateFile;
         try {
             List<String> supportedLines = Files.readAllLines(Paths.get(supportedPath));
             supported = CiphersuiteList.parse(supportedLines);
 
-            certificateFile = new BufferedInputStream(new FileInputStream(certificatePath));
-            CertificateFactory factory = CertificateFactory.getInstance("X.509");
-            certificate = (X509Certificate) factory.generateCertificate(certificateFile);
-
-            FileInputStream stream = new FileInputStream(certificatePath);
-            String certificateEncoded = new String(stream.readAllBytes());
-            stream.close();
-
             KeyStore keyStore = KeyStore.getInstance("JKS");
             keyStore.load(new FileInputStream(keystorePath), password.toCharArray());
-            return new Handshake(supported, certificate, certificateEncoded, keyStore, password);
+            Map<String, X509Certificate[]> certificates = new HashMap<>();
+            Enumeration<String> aliases = keyStore.aliases();
+            while (aliases.hasMoreElements()) {
+                String alias = aliases.nextElement();
+                if(keyStore.entryInstanceOf(alias, KeyStore.PrivateKeyEntry.class)){
+                    Certificate[] chain = keyStore.getCertificateChain(alias);
+                    X509Certificate[] x509Chain = new X509Certificate[chain.length];
+                    for (int i = 0; i < x509Chain.length; i++) {
+                        x509Chain[i] = (X509Certificate) chain[i];
+                    }
+                    certificates.put(alias, x509Chain);
+                }
+
+            }
+
+            return new Handshake(supported, certificates, keyStore, password);
         } catch (IOException | CertificateException |
                  KeyStoreException | NoSuchAlgorithmException e) {
             throw new CryptoException("Error initializing handshake", e);
         }
     }
 
-    public Handshake(CiphersuiteList supported, X509Certificate certificate,
-                     String myCertificateEncoded, KeyStore keyStore, String password) {
+    public Handshake(CiphersuiteList supported, Map<String, X509Certificate[]> certificates,
+                     KeyStore keyStore, String password) {
         this.supported = supported;
-        this.myCertificate = certificate;
-        this.myCertificateEncoded = myCertificateEncoded;
+        this.myCertificates = certificates;
         this.keyStore = keyStore;
         this.password = password;
     }
@@ -253,10 +259,10 @@ public class Handshake {
 
     private void verifySignature(byte[] data, String signatureHex)
             throws CryptoException, IntegrityException {
-        String signatureAlgorithm = hanshakeCS.getScheme();
+        String signatureAlgorithm = handshakeCS.getScheme();
         try{
             Signature signature = Signature.getInstance(signatureAlgorithm);
-            signature.initVerify(peerCertificate);
+            signature.initVerify(peerCertificate[0]);
             byte[] signatureBytes = hexToBytes(signatureHex);
             signature.update(data);
             if(!signature.verify(signatureBytes)){
@@ -338,31 +344,53 @@ public class Handshake {
 
     private void pickSuites(CiphersuiteList clientSupported) throws CryptoException {
         this.sessionCS = supported.findFirstSession(clientSupported);
-        this.hanshakeCS = supported.findFirstHandshake(clientSupported);
-        if(this.sessionCS == null || this.hanshakeCS == null){
+        this.handshakeCS = supported.findFirstHandshake(clientSupported);
+        if(this.sessionCS == null || this.handshakeCS == null){
             throw new CryptoException("Negotiation failed");
         }
     }
 
     private void readPeerCertificate(Scanner scanner) throws CryptoException, IntegrityException{
         StringBuilder cert = new StringBuilder();
-        String line = scanner.nextLine();
-        if(!line.trim().equalsIgnoreCase(CERTIFICATE_HEADER)){
-            throw new CryptoException("Expected certificate");
-        }
+        String alias = "";
+        String line;
+        do {
+            String lineStart = scanner.next();
+            if (!lineStart.trim().equalsIgnoreCase(CERTIFICATE_HEADER)) {
+                throw new CryptoException("Expected certificate");
+            }
+            alias = scanner.next();
+            scanner.nextLine();
+            line = scanner.nextLine();
+            while (!line.trim().equalsIgnoreCase(CERTIFICATE_TAIL)) {
+                line = scanner.nextLine();
+            }
+        } while (!alias.equalsIgnoreCase(handshakeCS.getScheme().split("with")[0]));
+
         line = scanner.nextLine();
         while(!line.trim().equalsIgnoreCase(CERTIFICATE_TAIL)){
             cert.append(line).append("\n");
             line = scanner.nextLine();
         }
+        while (scanner.hasNext(CERTIFICATE_HEADER)){
+            scanner.nextLine();
+            line = scanner.nextLine();
+            while(!line.trim().equalsIgnoreCase(CERTIFICATE_TAIL)){
+                line = scanner.nextLine();
+            }
+        }
         try {
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
             byte[] b = cert.toString().getBytes();
             InputStream stream = new ByteArrayInputStream(b);
-            this.peerCertificate = (X509Certificate) cf.generateCertificate(stream);
-            peerCertificate.checkValidity();
-            
-            //TODO check if trusted
+            Collection<?> collection = cf.generateCertificates(stream);
+            X509Certificate[] chain = new X509Certificate[collection.size()];
+            Iterator<?> iterator = collection.iterator();
+            for (int i = 0; i < chain.length; i++) {
+                chain[i] = (X509Certificate)iterator.next();
+            }
+            this.peerCertificate = chain;
+            checkCertificate();
         } catch (CertificateExpiredException | CertificateNotYetValidException e){
             throw new IntegrityException("Untrusted certificate", e);
         } catch (CertificateException e) {
@@ -370,7 +398,40 @@ public class Handshake {
         }
     }
 
-    public byte[] generateClientHello() {
+    private void checkCertificate() throws  IntegrityException{
+        try {
+            for (X509Certificate cert : peerCertificate) {
+                cert.checkValidity();
+            }
+            TrustManagerFactory factory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            factory.init(keyStore);
+            for (TrustManager manager : factory.getTrustManagers()){
+                if(manager instanceof X509TrustManager){
+                    ((X509TrustManager) manager).checkServerTrusted(this.peerCertificate, "RSA");
+                }
+            }
+        } catch (NoSuchAlgorithmException | KeyStoreException e) {
+            throw new RuntimeException(e);
+        } catch (CertificateException e) {
+            throw new IntegrityException("Untrusted certificate", e);
+        }
+    }
+
+    private void appendCertificates(StringBuilder builder, X509Certificate[] certificates) throws CryptoException{
+        try {
+            Base64.Encoder encoder = Base64.getEncoder();
+            for(X509Certificate certificate : certificates){
+                String encoded = encoder.encodeToString(certificate.getEncoded());
+                builder.append(CHAIN_BEGIN).append("\n");
+                builder.append(encoded).append("\n");
+                builder.append(CHAIN_END).append("\n");
+            }
+        } catch (CertificateException e) {
+            throw new CryptoException("Failed to append certificate", e);
+        }
+    }
+
+    public byte[] generateClientHello() throws CryptoException {
         StringBuilder builder = new StringBuilder();
         builder.append(CLIENT_HELLO).append("\n");
         builder.append(NEGOTIATION_HEADER).append("\n");
@@ -381,9 +442,12 @@ public class Handshake {
         generateDH();
         appendField(builder, EXCHANGE_FIELD, CryptoStuff.bytesToHex(dhPublic.getEncoded()));
 
-        builder.append(CERTIFICATE_HEADER).append("\n");
-        builder.append(myCertificateEncoded).append("\n");
-        builder.append(CERTIFICATE_TAIL).append("\n");
+        for (Map.Entry<String, X509Certificate[]> entry : myCertificates.entrySet()){
+            builder.append(CERTIFICATE_HEADER).append(" ").append(entry.getKey()).append("\n");
+            appendCertificates(builder, entry.getValue());
+            builder.append(CERTIFICATE_TAIL).append("\n");
+        }
+
         this.clientHello = builder.toString().getBytes();
         return this.clientHello;
     }
@@ -413,10 +477,10 @@ public class Handshake {
         String clientNonce = expectField(scanner, NONCE_FIELD);
 
         generateDH();
-
+        pickSuites(clientSupported);
         finishDH(expectField(scanner, EXCHANGE_FIELD));
         readPeerCertificate(scanner);
-        pickSuites(clientSupported);
+
         return generateServerHello(clientTimestamp, clientNonce);
     }
 
@@ -425,7 +489,7 @@ public class Handshake {
         builder.append(SERVER_HELLO).append("\n");
         CiphersuiteList picked = new CiphersuiteList();
         picked.addSession(sessionCS);
-        picked.addHandshake(hanshakeCS);
+        picked.addHandshake(handshakeCS);
         builder.append(PICKED_HEAD).append("\n");
         builder.append(picked.stringBuilder());
         builder.append(PICKED_TAIL).append("\n");
@@ -437,11 +501,12 @@ public class Handshake {
 
         appendField(builder, EXCHANGE_FIELD, CryptoStuff.bytesToHex(dhPublic.getEncoded()));
 
-        builder.append(CERTIFICATE_HEADER).append("\n");
-        builder.append(myCertificateEncoded).append("\n");
+
+        builder.append(CERTIFICATE_HEADER).append(" ").append(handshakeCS.getScheme()).append("\n");
+        appendCertificates(builder, myCertificates.get(handshakeCS.getScheme()));
         builder.append(CERTIFICATE_TAIL).append("\n");
 
-        sign(builder, hanshakeCS.getScheme());
+        sign(builder, handshakeCS.getScheme());
         return builder.toString().getBytes();
     }
 
@@ -466,7 +531,7 @@ public class Handshake {
         }
         CiphersuiteList picked = CiphersuiteList.parse(lines);
         this.sessionCS = picked.getSession(0);
-        this.hanshakeCS = picked.getHandshake(0);
+        this.handshakeCS = picked.getHandshake(0);
 
         String serverTimestamp = expectField(scanner, TIMESTAMP_FIELD);
         String serverNonce = expectField(scanner, NONCE_FIELD);
@@ -511,7 +576,7 @@ public class Handshake {
         StringBuilder builder = new StringBuilder();
         produceCrypto();
 
-        String delayedSignature = generateSignature(clientHello, hanshakeCS.getScheme());
+        String delayedSignature = generateSignature(clientHello, handshakeCS.getScheme());
         appendField(builder, DELAYED_SIGNATURE_FIELD, delayedSignature);
 
         appendField(builder, RETURN_TIMESTAMP_FIELD, serverTimestamp);
@@ -523,7 +588,7 @@ public class Handshake {
             throw new CryptoException("Unexpected integrity failure while encrypting");
         }
         appendField(builder, PIGGYBACK, bytesToHex(piggyback, 0, piggybackLength));
-        sign(builder, hanshakeCS.getScheme());
+        sign(builder, handshakeCS.getScheme());
         return builder.toString().getBytes();
     }
 
