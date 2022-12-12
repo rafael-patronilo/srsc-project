@@ -48,9 +48,6 @@ public class hjBox {
             System.exit(1);
         }
 
-        Handshake handshake = Handshake.load("hjBox/hjbox1.cer",
-                "hjBox/configs/supported", "hjBox/box.jks", PASSWORD);
-
 
         Properties properties = new Properties();
         properties.load(inputStream);
@@ -59,11 +56,17 @@ public class hjBox {
 
         SocketAddress inSocketAddress = parseSocketAddress(remote);
         Set<SocketAddress> outSocketAddressSet = Arrays.stream(destinations.split(",")).map(s -> parseSocketAddress(s)).collect(Collectors.toSet());
-        CryptoStuff boxCrypto = CryptoStuff.loadFromFile("hjBox/configs/box-cryptoconfig", "127.0.0.1:6666");
+        //CryptoStuff boxCrypto = CryptoStuff.loadFromFile("hjBox/configs/box-cryptoconfig", "127.0.0.1:6666");
+        DatagramSocket inSocket = null;// new DatagramSocket(inSocketAddress);
+        DatagramSocket outSocket = null; // new DatagramSocket();
+        byte[] buffer = new byte[10096];
+        Handshake handshake = Handshake.load("hjBox/configs/supported",
+                "hjBox/box.jks", PASSWORD);
+        handshake.sendHandshake(buffer, new InetSocketAddress(1999), inSocketAddress, "cars".getBytes());
+        System.out.println("Handshake completed");
+        CryptoStuff boxCrypto = handshake.getGeneratedCrypto();
         boxCrypto.printProperties();
-        DatagramSocket inSocket = new DatagramSocket(inSocketAddress);
-        DatagramSocket outSocket = new DatagramSocket();
-        byte[] buffer = new byte[4096];
+
         // probably you ned to use a larger buffer for the requirements of
         // TP1 - remember that you will receive datagrams with encrypted
         // contents, so depending on the crypto configurations, the datagrams

@@ -9,6 +9,7 @@ package hjStreamServer;
  */
 
 import crypto.CryptoStuff;
+import crypto.Handshake;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -17,7 +18,7 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 
 public class hjStreamServer {
-
+    private static final String PASSWORD = "c4b0fbc4820e2e904b944f58ce4d90b4";
     static public void main(String[] args) throws Exception {
 
         if (args.length != 3) {
@@ -46,12 +47,21 @@ public class hjStreamServer {
         int frate;  // observed frame rate in segments/sec)
         int tput;   // observed throughput (in Kbytes/sec)
 
+        byte[] buffer = new byte[10096]; // can change if required
+        InetSocketAddress addr =
+                new InetSocketAddress(args[1], Integer.parseInt(args[2]));
+        Handshake handshake = Handshake.load("hjStreamServer/configs/supported",
+                "hjStreamServer/server.jks", PASSWORD);
+        handshake.listenForHandshake(buffer, addr);
+        System.out.println("Handshake completed");
+        CryptoStuff boxCrypto = handshake.getGeneratedCrypto();
+        boxCrypto.printProperties();
         String box = args[1] + ":" + args[2];
         String[] moviePath = args[0].split("/");
         movie = moviePath[moviePath.length - 1];
 
-        CryptoStuff boxCrypto = CryptoStuff.loadFromFile("hjStreamServer/configs/box-cryptoconfig", box);
-        boxCrypto.printProperties();
+        //CryptoStuff boxCrypto = CryptoStuff.loadFromFile("hjStreamServer/configs/box-cryptoconfig", box);
+        //boxCrypto.printProperties();
         CryptoStuff movieCrypto = CryptoStuff.loadFromFile("hjStreamServer/configs/movies-cryptoconfig", movie);
         movieCrypto.printProperties();
 
@@ -59,13 +69,12 @@ public class hjStreamServer {
 
         DataInputStream g =
                 new DataInputStream(new ByteArrayInputStream(movieData));
-        byte[] buff = new byte[4096]; // can change if required
+
 
 
         DatagramSocket s = new DatagramSocket();
-        InetSocketAddress addr =
-                new InetSocketAddress(args[1], Integer.parseInt(args[2]));
-        DatagramPacket p = new DatagramPacket(buff, buff.length, addr);
+
+        DatagramPacket p = new DatagramPacket(buffer, buffer.length, addr);
         long t0 = System.nanoTime(); // current time
         long t = t0;
         long q0 = 0;
@@ -83,10 +92,10 @@ public class hjStreamServer {
             time = g.readLong();
             if (count == 0) q0 = time; // ref time encoded
             count += 1;
-            g.readFully(buff, 0, size);
+            g.readFully(buffer, 0, size);
             System.out.print(".");
-            packetSize = boxCrypto.handlePacket(buff, size);
-            p.setData(buff, 0, packetSize);
+            packetSize = boxCrypto.handlePacket(buffer, size);
+            p.setData(buffer, 0, packetSize);
             p.setSocketAddress(addr);
             t = System.nanoTime();
             Thread.sleep(Math.max(0, ((time - q0) - (t - t0)) / 1000000)/*10000*/);

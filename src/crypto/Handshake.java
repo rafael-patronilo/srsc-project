@@ -1,5 +1,7 @@
 package crypto;
 
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
 import javax.crypto.*;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
@@ -21,6 +23,11 @@ import static crypto.CryptoStuff.bytesToHex;
 import static crypto.CryptoStuff.hexToBytes;
 
 public class Handshake {
+
+    private static BouncyCastleProvider bouncyCastle = new BouncyCastleProvider();
+    static {
+        Security.insertProviderAt(bouncyCastle, 0);
+    }
     public static final int NONCE_LENGTH = 8;
     public static final int DH_KEY_SIZE = 2048;
 
@@ -118,43 +125,43 @@ public class Handshake {
     public int listenForHandshake(byte[] buffer, SocketAddress inAddress)
             throws CryptoException, IntegrityException{
         boolean externalError = false;
-        DatagramSocket outgoing = null;
+        DatagramSocket socket = null;
         try {
-            DatagramSocket incoming = new DatagramSocket(inAddress);
+            socket = new DatagramSocket(inAddress);
 
             DatagramPacket clientHelloPacket = new DatagramPacket(buffer, buffer.length);
-            incoming.receive(clientHelloPacket);
+            socket.receive(clientHelloPacket);
             String error = isError(buffer, clientHelloPacket.getLength());
             if(error != null){
                 externalError = true;
-                throw new CryptoException(error);
+                throw new CryptoException("Peer error: " + error);
             }
+            socket.connect(clientHelloPacket.getSocketAddress());
             byte[] serverHello = respondClientHello(buffer, clientHelloPacket.getLength());
+            Files.write(Paths.get("serverHello.txt"), serverHello); //TODO remove this
 
-            outgoing = new DatagramSocket(clientHelloPacket.getSocketAddress());
             DatagramPacket serverHelloPacket = new DatagramPacket(serverHello, serverHello.length);
-            outgoing.send(serverHelloPacket);
+            socket.send(serverHelloPacket);
 
             DatagramPacket clientConfirmationPacket = new DatagramPacket(buffer, buffer.length);
-            incoming.receive(clientConfirmationPacket);
-            error = isError(buffer, clientHelloPacket.getLength());
+            socket.receive(clientConfirmationPacket);
+            error = isError(buffer, clientConfirmationPacket.getLength());
             if(error != null){
                 externalError = true;
-                throw new CryptoException(error);
+                throw new CryptoException("Peer error: " + error);
             }
             int read = receiveClientConfirmation(buffer, clientConfirmationPacket.getLength(), buffer);
 
-            incoming.close();
-            outgoing.close();
+            socket.close();
             return read;
         } catch (IOException e) {
             throw new RuntimeException(e);
         } catch (IntegrityException | CryptoException e){
-            if(outgoing != null && !externalError){
+            if(!externalError){
                 byte[] errorPacket = generateErrorPacket(e);
                 DatagramPacket error = new DatagramPacket(errorPacket, errorPacket.length);
                 try {
-                    outgoing.send(error);
+                    socket.send(error);
                 } catch (IOException e2){
                     throw new RuntimeException(e2);
                 }
@@ -164,34 +171,34 @@ public class Handshake {
     }
 
     public void sendHandshake(byte[] buffer, SocketAddress inAddress, SocketAddress outAddress,
-                                     byte[] piggyback, int piggybackLength)
+                                     byte[] piggyback)
             throws CryptoException, IntegrityException{
         boolean externalError = false;
-        DatagramSocket outgoing = null;
+        DatagramSocket socket = null;
         try {
-            DatagramSocket incoming = new DatagramSocket(inAddress);
-            outgoing = new DatagramSocket(outAddress);
+            socket = new DatagramSocket(inAddress);
+            socket.connect(outAddress);
 
             byte[] clientHello = generateClientHello();
+            Files.write(Paths.get("clientHello.txt"), clientHello); //TODO remove this
             DatagramPacket clientHelloPacket = new DatagramPacket(clientHello, clientHello.length);
-            outgoing.send(clientHelloPacket);
+            socket.send(clientHelloPacket);
 
             DatagramPacket serverHelloPacket = new DatagramPacket(buffer, buffer.length);
-            incoming.receive(serverHelloPacket);
+            socket.receive(serverHelloPacket);
             String error = isError(buffer, serverHelloPacket.getLength());
             if(error != null){
                 externalError = true;
-                throw new CryptoException(error);
+                throw new CryptoException("Peer error: " + error);
             }
 
             byte[] clientConfirmation = respondServerHello(buffer, serverHelloPacket.getLength(),
-                    piggyback, piggybackLength);
+                    piggyback, buffer);
+            Files.write(Paths.get("clientConfirmation.txt"), clientConfirmation); //TODO remove this
             DatagramPacket clientConfirmationPacket = new DatagramPacket(clientConfirmation,
                     clientConfirmation.length);
-            outgoing.send(clientConfirmationPacket);
-
-            incoming.close();
-            outgoing.close();
+            socket.send(clientConfirmationPacket);
+            socket.close();
         } catch (IOException e) {
             throw new RuntimeException(e);
         } catch (IntegrityException | CryptoException e){
@@ -199,7 +206,7 @@ public class Handshake {
                 byte[] errorPacket = generateErrorPacket(e);
                 DatagramPacket error = new DatagramPacket(errorPacket, errorPacket.length);
                 try {
-                    outgoing.send(error);
+                    socket.send(error);
                 } catch (IOException e2){
                     throw new RuntimeException(e2);
                 }
@@ -216,23 +223,29 @@ public class Handshake {
         } catch (NoSuchAlgorithmException e) {
             isMac = false;
         }
-        SecureRandom secureRandom = new SecureRandom();
-        secureRandom.setSeed(dhSecret);
+        byte[] something = new byte[10];
+        System.out.println("dhSecret (again)" + bytesToHex(dhSecret));
+        SecureRandom secureRandom = new SecureRandom(dhSecret);
+        secureRandom.nextBytes(something);
+        System.out.println("something" + bytesToHex(something));
+        System.out.println(secureRandom.getProvider().getName());
         try{
-            KeyGenerator keyGenerator = KeyGenerator.getInstance(sessionCS.getScheme());
+            KeyGenerator keyGenerator = KeyGenerator.getInstance(sessionCS.getScheme().split("/")[0]);
             keyGenerator.init(secureRandom);
             String key = bytesToHex(keyGenerator.generateKey().getEncoded());
+            System.out.println(key); //TODO remove this
             String macKey = null;
             if(isMac){
                 KeyGenerator macGenerator = KeyGenerator.getInstance(sessionCS.getIntegrityCheck());
                 macGenerator.init(secureRandom);
                 macKey = bytesToHex(macGenerator.generateKey().getEncoded());
+                System.out.println(macKey); //TODO remove this
             }
             String algorithm = sessionCS.getScheme().split("/")[0];
             byte[] ivBytes = new byte[Cipher.getInstance(sessionCS.getScheme()).getBlockSize()];
             secureRandom.nextBytes(ivBytes);
             generatedCrypto = new CryptoStuff(key, algorithm, sessionCS.getScheme(), bytesToHex(ivBytes),
-                    null, macKey, sessionCS.getIntegrityCheck());
+                    sessionCS.getIntegrityCheck(), macKey, null);
         } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
             throw new CryptoException("Key generation failed", e);
         }
@@ -294,12 +307,12 @@ public class Handshake {
 
     private void generateDH(){
         try {
-            KeyPairGenerator generator = KeyPairGenerator.getInstance("DH", "BC");
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("DH");
             generator.initialize(DH_KEY_SIZE);
             KeyPair pair = generator.generateKeyPair();
             this.dhPrivate = pair.getPrivate();
             this.dhPublic = pair.getPublic();
-        } catch (NoSuchAlgorithmException | NoSuchProviderException e) {
+        } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException(e);
         }
     }
@@ -312,6 +325,7 @@ public class Handshake {
             PublicKey peerKey = kf.generatePublic(new X509EncodedKeySpec(CryptoStuff.hexToBytes(peerPublic)));
             agreement.doPhase(peerKey, true);
             dhSecret = agreement.generateSecret();
+            System.out.println("dhSecret: " + bytesToHex(dhSecret)); //TODO remove this
         } catch (NoSuchAlgorithmException | NoSuchProviderException |
                  InvalidKeyException | InvalidKeySpecException e) {
             throw new CryptoException("Error completing Diffie Hellman", e);
@@ -354,18 +368,23 @@ public class Handshake {
         StringBuilder cert = new StringBuilder();
         String alias = "";
         String line;
-        do {
+        boolean found = false;
+        while(!found) {
             String lineStart = scanner.next();
             if (!lineStart.trim().equalsIgnoreCase(CERTIFICATE_HEADER)) {
                 throw new CryptoException("Expected certificate");
             }
             alias = scanner.next();
             scanner.nextLine();
-            line = scanner.nextLine();
-            while (!line.trim().equalsIgnoreCase(CERTIFICATE_TAIL)) {
+            if(!alias.equalsIgnoreCase(handshakeCS.getScheme().split("with")[1])) {
                 line = scanner.nextLine();
+                while (!line.trim().equalsIgnoreCase(CERTIFICATE_TAIL)) {
+                    line = scanner.nextLine();
+                }
+            } else {
+                found = true;
             }
-        } while (!alias.equalsIgnoreCase(handshakeCS.getScheme().split("with")[0]));
+        }
 
         line = scanner.nextLine();
         while(!line.trim().equalsIgnoreCase(CERTIFICATE_TAIL)){
@@ -457,7 +476,8 @@ public class Handshake {
     }
 
     public byte[] respondClientHello(byte[] clientHello, int length) throws CryptoException, IntegrityException{
-        this.clientHello = clientHello;
+        this.clientHello = new byte[length];
+        System.arraycopy(clientHello, 0, this.clientHello, 0, length);
         Scanner scanner = new Scanner(new ByteArrayInputStream(clientHello, 0, length));
         if(!scanner.nextLine().trim().equalsIgnoreCase(CLIENT_HELLO)){
             throw new CryptoException("Not a client hello");
@@ -501,20 +521,20 @@ public class Handshake {
 
         appendField(builder, EXCHANGE_FIELD, CryptoStuff.bytesToHex(dhPublic.getEncoded()));
 
-
-        builder.append(CERTIFICATE_HEADER).append(" ").append(handshakeCS.getScheme()).append("\n");
-        appendCertificates(builder, myCertificates.get(handshakeCS.getScheme()));
+        String alias = handshakeCS.getScheme().split("with")[1].toLowerCase();
+        builder.append(CERTIFICATE_HEADER).append(" ").append(alias).append("\n");
+        appendCertificates(builder, myCertificates.get(alias));
         builder.append(CERTIFICATE_TAIL).append("\n");
 
         sign(builder, handshakeCS.getScheme());
         return builder.toString().getBytes();
     }
 
-    public byte[] respondServerHello(byte[] serverHello, byte[] piggyback, int piggybackLength) throws CryptoException, IntegrityException{
-        return respondServerHello(serverHello, serverHello.length, piggyback, piggybackLength);
+    public byte[] respondServerHello(byte[] serverHello, byte[] piggyback, byte[] buffer) throws CryptoException, IntegrityException{
+        return respondServerHello(serverHello, serverHello.length, piggyback, buffer);
     }
 
-    public byte[] respondServerHello(byte[] serverHello, int length, byte[] piggyback, int piggybackLength) throws CryptoException, IntegrityException{
+    public byte[] respondServerHello(byte[] serverHello, int length, byte[] piggyback, byte[] buffer) throws CryptoException, IntegrityException{
         Scanner scanner = new Scanner(new ByteArrayInputStream(serverHello, 0, length));
 
         if(!scanner.nextLine().trim().equalsIgnoreCase(SERVER_HELLO)){
@@ -543,7 +563,7 @@ public class Handshake {
         String signature = expectField(scanner, SIGNATURE_FIELD);
         verifySignature(readUpToSignature(serverHello), signature);
 
-        return generateClientConfirmation(serverTimestamp, serverNonce, piggyback, piggybackLength);
+        return generateClientConfirmation(serverTimestamp, serverNonce, piggyback, buffer);
     }
 
     private void checkChallenge(Scanner scanner) throws CryptoException {
@@ -572,7 +592,7 @@ public class Handshake {
     }
 
     private byte[] generateClientConfirmation(String serverTimestamp, String serverNonce, byte[] piggyback,
-                                              int piggybackLength) throws CryptoException{
+                                              byte[] buffer) throws CryptoException{
         StringBuilder builder = new StringBuilder();
         produceCrypto();
 
@@ -583,11 +603,12 @@ public class Handshake {
         appendField(builder, RETURN_NONCE_FIELD, serverNonce);
         generatedCrypto.startEncryption();
         try {
-            piggybackLength = generatedCrypto.handlePacket(piggyback, piggybackLength);
+            System.arraycopy(piggyback, 0, buffer, 0, piggyback.length);
+            int length = generatedCrypto.handlePacket(buffer, piggyback.length);
+            appendField(builder, PIGGYBACK, bytesToHex(buffer, 0, length));
         } catch (IntegrityException e){
             throw new CryptoException("Unexpected integrity failure while encrypting");
         }
-        appendField(builder, PIGGYBACK, bytesToHex(piggyback, 0, piggybackLength));
         sign(builder, handshakeCS.getScheme());
         return builder.toString().getBytes();
     }

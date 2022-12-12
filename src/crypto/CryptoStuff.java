@@ -27,7 +27,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 public class CryptoStuff {
     private static BouncyCastleProvider bouncyCastle = new BouncyCastleProvider();
     static {
-        Security.insertProviderAt(bouncyCastle, 0);
+        //Security.insertProviderAt(bouncyCastle, 0);
     }
     private String key;
     private final String algorithm;
