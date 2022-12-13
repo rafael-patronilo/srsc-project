@@ -223,23 +223,17 @@ public class Handshake {
         } catch (NoSuchAlgorithmException e) {
             isMac = false;
         }
-        byte[] something = new byte[10];
-        System.out.println("dhSecret (again)" + bytesToHex(dhSecret));
-        SecureRandom secureRandom = new SecureRandom(dhSecret);
-        secureRandom.nextBytes(something);
-        System.out.println("something" + bytesToHex(something));
-        System.out.println(secureRandom.getProvider().getName());
         try{
+            SecureRandom secureRandom = SecureRandom.getInstance("SHA1PRNG");
+            secureRandom.setSeed(dhSecret);
             KeyGenerator keyGenerator = KeyGenerator.getInstance(sessionCS.getScheme().split("/")[0]);
             keyGenerator.init(secureRandom);
             String key = bytesToHex(keyGenerator.generateKey().getEncoded());
-            System.out.println(key); //TODO remove this
             String macKey = null;
             if(isMac){
                 KeyGenerator macGenerator = KeyGenerator.getInstance(sessionCS.getIntegrityCheck());
                 macGenerator.init(secureRandom);
                 macKey = bytesToHex(macGenerator.generateKey().getEncoded());
-                System.out.println(macKey); //TODO remove this
             }
             String algorithm = sessionCS.getScheme().split("/")[0];
             byte[] ivBytes = new byte[Cipher.getInstance(sessionCS.getScheme()).getBlockSize()];
@@ -325,7 +319,6 @@ public class Handshake {
             PublicKey peerKey = kf.generatePublic(new X509EncodedKeySpec(CryptoStuff.hexToBytes(peerPublic)));
             agreement.doPhase(peerKey, true);
             dhSecret = agreement.generateSecret();
-            System.out.println("dhSecret: " + bytesToHex(dhSecret)); //TODO remove this
         } catch (NoSuchAlgorithmException | NoSuchProviderException |
                  InvalidKeyException | InvalidKeySpecException e) {
             throw new CryptoException("Error completing Diffie Hellman", e);
