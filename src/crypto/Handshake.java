@@ -79,9 +79,15 @@ public class Handshake {
 
     private CryptoStuff generatedCrypto = null;
 
+    private String expectedName = null;
+
     private KeyStore keyStore;
 
     private String password;
+
+    public void setExpectedPeerName(String name) {
+        expectedName = name;
+    }
 
     public static Handshake load(String supportedPath,
                                  String keystorePath, String password) throws CryptoException {
@@ -271,11 +277,10 @@ public class Handshake {
         }
     }
 
-    private String generateSignature(byte[] data, String algorithm) throws CryptoException{
+    private String generateSignature(byte[] data, String algorithm, String keyName) throws CryptoException{
         try {
             Signature signature = Signature.getInstance(algorithm);
-            String pkAlg = algorithm.split("with")[1];
-            signature.initSign((PrivateKey) keyStore.getKey(pkAlg, password.toCharArray()));
+            signature.initSign((PrivateKey) keyStore.getKey(keyName, password.toCharArray()));
             signature.update(data);
             return bytesToHex(signature.sign());
         } catch (NoSuchAlgorithmException | KeyStoreException | UnrecoverableKeyException |
@@ -284,8 +289,8 @@ public class Handshake {
         }
     }
 
-    private void sign(StringBuilder builder, String algorithm) throws CryptoException {
-        String signature = generateSignature(builder.toString().getBytes(), algorithm);
+    private void sign(StringBuilder builder, String algorithm, String keyName) throws CryptoException {
+        String signature = generateSignature(builder.toString().getBytes(), algorithm, keyName);
         builder.append(SIGNATURE_FIELD).append(":")
                 .append(signature).append("\n");
     }
@@ -403,6 +408,10 @@ public class Handshake {
 
     private void checkCertificate() throws  IntegrityException{
         try {
+            if(expectedName!=null && !expectedName.equalsIgnoreCase(peerCertificate[0].getSubjectX500Principal().getName())){
+                throw new IntegrityException("Certificate name mismatch. Expected " +
+                        expectedName + " got " + peerCertificate[0].getSubjectX500Principal().getName());
+            }
             for (X509Certificate cert : peerCertificate) {
                 cert.checkValidity();
             }
@@ -494,6 +503,7 @@ public class Handshake {
         CiphersuiteList picked = new CiphersuiteList();
         picked.addSession(sessionCS);
         picked.addHandshake(handshakeCS);
+        System.out.println("Negotiated ciphersuites:\n" + picked);
         builder.append(PICKED_HEAD).append("\n");
         builder.append(picked.stringBuilder());
         builder.append(PICKED_TAIL).append("\n");
@@ -510,7 +520,7 @@ public class Handshake {
         appendCertificates(builder, myCertificates.get(alias));
         builder.append(CERTIFICATE_TAIL).append("\n");
 
-        sign(builder, handshakeCS.getScheme());
+        sign(builder, handshakeCS.getScheme(), handshakeCS.getKeyType());
         return builder.toString().getBytes();
     }
 
@@ -534,6 +544,7 @@ public class Handshake {
             line = scanner.nextLine();
         }
         CiphersuiteList picked = CiphersuiteList.parse(lines);
+        System.out.println("Negotiated ciphersuites:\n" + picked);
         this.sessionCS = picked.getSession(0);
         this.handshakeCS = picked.getHandshake(0);
 
@@ -580,7 +591,7 @@ public class Handshake {
         StringBuilder builder = new StringBuilder();
         produceCrypto();
 
-        String delayedSignature = generateSignature(clientHello, handshakeCS.getScheme());
+        String delayedSignature = generateSignature(clientHello, handshakeCS.getScheme(), handshakeCS.getKeyType());
         appendField(builder, DELAYED_SIGNATURE_FIELD, delayedSignature);
 
         appendField(builder, RETURN_TIMESTAMP_FIELD, serverTimestamp);
@@ -593,7 +604,7 @@ public class Handshake {
         } catch (IntegrityException e){
             throw new CryptoException("Unexpected integrity failure while encrypting");
         }
-        sign(builder, handshakeCS.getScheme());
+        sign(builder, handshakeCS.getScheme(), handshakeCS.getKeyType());
         return builder.toString().getBytes();
     }
 

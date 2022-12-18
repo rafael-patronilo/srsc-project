@@ -16,6 +16,7 @@ import java.io.DataInputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.net.PortUnreachableException;
 
 public class hjStreamServer {
     private static final String PASSWORD = "c4b0fbc4820e2e904b944f58ce4d90b4";
@@ -88,6 +89,7 @@ public class hjStreamServer {
         byte[] movieB = movie.getBytes();
         p.setData(movieB);
         s.send(p);
+        boolean boxDisconnected = false;
 
         while (g.available() > 0) {
             size = g.readShort();
@@ -103,15 +105,23 @@ public class hjStreamServer {
             t = System.nanoTime();
             Thread.sleep(Math.max(0, ((time - q0) - (t - t0)) / 1000000)/*10000*/);
             // send packet (with a frame payload)
-            s.send(p);
+            try {
+                s.send(p);
+            } catch (PortUnreachableException e) {
+                System.out.println("Box disconnected");
+                boxDisconnected = true;
+                break;
+            }
             //System.out.print("."); // only for debug
             // comment this for final experiment al observations
         }
         System.out.println();
 
-        //Send empty packet to signal end of stream
-        p.setData(new byte[0], 0, 0);
-        s.send(p);
+        if (!boxDisconnected) {
+            //Send empty packet to signal end of stream
+            p.setData(new byte[0], 0, 0);
+            s.send(p);
+        }
 
         // you must inlude now the call for PrintStats to print the
         // experimental observation of instrumentation variables

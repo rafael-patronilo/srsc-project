@@ -65,9 +65,11 @@ public class hjBox {
         inSocket.connect(inSocketAddress);
         DatagramSocket outSocket = new DatagramSocket();
         byte[] buffer = new byte[10096];
+        String movie = args[0];
         Handshake handshake = Handshake.load("hjBox/configs/supported",
                 "hjBox/box.jks", PASSWORD);
-        handshake.sendHandshake(buffer, inSocket, args[0].getBytes());
+        handshake.setExpectedPeerName("CN=hjserver");//prevent against box certificates
+        handshake.sendHandshake(buffer, inSocket, movie.getBytes());
         System.out.println("Handshake completed");
         CryptoStuff boxCrypto = handshake.getGeneratedCrypto();
         boxCrypto.printProperties();
@@ -83,7 +85,6 @@ public class hjBox {
         while (true){
             DatagramPacket inPacket = new DatagramPacket(buffer, buffer.length);
             inSocket.receive(inPacket);
-            String movie = new String(buffer, 0, buffer.length);
             streamMovie(movie, buffer, inSocket, outSocket, outSocketAddressSet, boxCrypto);
         }
 
