@@ -122,14 +122,15 @@ public class hjBox {
             count++;
             DatagramPacket inPacket = new DatagramPacket(buffer, buffer.length);
             inSocket.receive(inPacket);
-            if(inPacket.getLength()==0)
+            System.out.println(inPacket.getLength());
+            if(inPacket.getLength()==1 && buffer[0]==(byte)0xFF)
                 break;
             ascsegments += inPacket.getLength();
             try {
                 packetSize = boxCrypto.handlePacket(buffer, inPacket.getLength());
                 decsegments += packetSize;
                 ms += packetSize;
-                System.out.print(".");
+                //System.out.print(".");
                 for (SocketAddress outSocketAddress : outSocketAddressSet) {
                     outSocket.send(new DatagramPacket(buffer, packetSize, outSocketAddress));
                 }

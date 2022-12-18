@@ -119,7 +119,8 @@ public class hjStreamServer {
 
         if (!boxDisconnected) {
             //Send empty packet to signal end of stream
-            p.setData(new byte[0], 0, 0);
+            System.out.println("Sending end packet");
+            p.setData(new byte[]{ (byte)0xFF }, 0, 1);
             s.send(p);
         }
 
