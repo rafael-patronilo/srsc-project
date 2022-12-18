@@ -21,9 +21,9 @@ public class hjStreamServer {
     private static final String PASSWORD = "c4b0fbc4820e2e904b944f58ce4d90b4";
     static public void main(String[] args) throws Exception {
 
-        if (args.length != 3) {
-            System.out.println("Use: hjStreamServer <movie> <ip-multicast-address> <port>");
-            System.out.println("or: hjStreamServer <movie> <ip-unicast-address> <port>");
+        if (args.length != 2) {
+            System.out.println("Use: hjStreamServer <ip-multicast-address> <port>");
+            System.out.println("or: hjStreamServer <ip-unicast-address> <port>");
             System.exit(-1);
         }
 
@@ -52,11 +52,11 @@ public class hjStreamServer {
                 new InetSocketAddress(args[1], Integer.parseInt(args[2]));
         Handshake handshake = Handshake.load("hjStreamServer/configs/supported",
                 "hjStreamServer/server.jks", PASSWORD);
-        handshake.listenForHandshake(buffer, addr);
+        DatagramSocket s = new DatagramSocket(addr);
+        handshake.listenForHandshake(buffer, s);
         System.out.println("Handshake completed");
         CryptoStuff boxCrypto = handshake.getGeneratedCrypto();
         boxCrypto.printProperties();
-        String box = args[1] + ":" + args[2];
         String[] moviePath = args[0].split("/");
         movie = moviePath[moviePath.length - 1];
 
@@ -70,11 +70,7 @@ public class hjStreamServer {
         DataInputStream g =
                 new DataInputStream(new ByteArrayInputStream(movieData));
 
-
-
-        DatagramSocket s = new DatagramSocket();
-
-        DatagramPacket p = new DatagramPacket(buffer, buffer.length, addr);
+        DatagramPacket p = new DatagramPacket(buffer, buffer.length);
         long t0 = System.nanoTime(); // current time
         long t = t0;
         long q0 = 0;
@@ -96,7 +92,7 @@ public class hjStreamServer {
             System.out.print(".");
             packetSize = boxCrypto.handlePacket(buffer, size);
             p.setData(buffer, 0, packetSize);
-            p.setSocketAddress(addr);
+            //p.setSocketAddress(addr);
             t = System.nanoTime();
             Thread.sleep(Math.max(0, ((time - q0) - (t - t0)) / 1000000)/*10000*/);
             // send packet (with a frame payload)

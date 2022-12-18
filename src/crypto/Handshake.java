@@ -122,13 +122,10 @@ public class Handshake {
         this.password = password;
     }
 
-    public int listenForHandshake(byte[] buffer, SocketAddress inAddress)
+    public int listenForHandshake(byte[] buffer, DatagramSocket socket)
             throws CryptoException, IntegrityException{
         boolean externalError = false;
-        DatagramSocket socket = null;
         try {
-            socket = new DatagramSocket(inAddress);
-
             DatagramPacket clientHelloPacket = new DatagramPacket(buffer, buffer.length);
             socket.receive(clientHelloPacket);
             String error = isError(buffer, clientHelloPacket.getLength());
@@ -151,8 +148,6 @@ public class Handshake {
                 throw new CryptoException("Peer error: " + error);
             }
             int read = receiveClientConfirmation(buffer, clientConfirmationPacket.getLength(), buffer);
-
-            socket.close();
             return read;
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -170,15 +165,11 @@ public class Handshake {
         }
     }
 
-    public void sendHandshake(byte[] buffer, SocketAddress inAddress, SocketAddress outAddress,
+    public void sendHandshake(byte[] buffer, DatagramSocket socket,
                                      byte[] piggyback)
             throws CryptoException, IntegrityException{
         boolean externalError = false;
-        DatagramSocket socket = null;
         try {
-            socket = new DatagramSocket(inAddress);
-            socket.connect(outAddress);
-
             byte[] clientHello = generateClientHello();
             Files.write(Paths.get("clientHello.txt"), clientHello); //TODO remove this
             DatagramPacket clientHelloPacket = new DatagramPacket(clientHello, clientHello.length);
@@ -198,7 +189,6 @@ public class Handshake {
             DatagramPacket clientConfirmationPacket = new DatagramPacket(clientConfirmation,
                     clientConfirmation.length);
             socket.send(clientConfirmationPacket);
-            socket.close();
         } catch (IOException e) {
             throw new RuntimeException(e);
         } catch (IntegrityException | CryptoException e){
