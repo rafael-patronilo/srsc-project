@@ -111,7 +111,6 @@ public class hjStreamServer {
 
         //Send empty packet to signal end of stream
         p.setData(new byte[0], 0, 0);
-        p.setSocketAddress(addr);
         s.send(p);
 
         // you must inlude now the call for PrintStats to print the

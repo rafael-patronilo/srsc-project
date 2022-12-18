@@ -136,7 +136,6 @@ public class hjBox {
                 System.out.println("\nCorrupted " + e.getMessage());
                 corruptedframes++;
             }
-            System.out.println();
         }
         t = System.nanoTime();
         // call PrintStats to print the obtained statistics from
