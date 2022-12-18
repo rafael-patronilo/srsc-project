@@ -20,12 +20,10 @@ scheme: AES/GCM/NoPadding
 keytype: AES-256
 integrity-check: HMAC-SHA256
 
-SESSION
 scheme: AES/GCM/NoPadding
 keytype: AES-256
 integrity-check: SHA256
 
-SESSION
 scheme: AES/GCM/NoPadding
 keytype: AES-128
 integrity-check: HMAC-SHA256
