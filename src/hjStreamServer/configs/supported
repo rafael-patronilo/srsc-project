@@ -20,6 +20,48 @@ scheme: AES/GCM/NoPadding
 keytype: AES-256
 integrity-check: HMAC-SHA256
 
+SESSION
+scheme: AES/GCM/NoPadding
+keytype: AES-256
+integrity-check: SHA256
+
+SESSION
+scheme: AES/GCM/NoPadding
+keytype: AES-128
+integrity-check: HMAC-SHA256
+
+scheme: AES/CTR/NoPadding
+keytype: AES-256
+integrity-check: HMAC-SHA256
+
+scheme: RC6/GCM/NoPadding
+keytype: RC6-128
+integrity-check: HMAC-SHA256
+
+scheme: RC6/GCM/NoPadding
+keytype: RC6-256
+integrity-check: HMAC-SHA256
+
+scheme: RC6/CCM/NoPadding
+keytype: RC6-128
+integrity-check: HMAC-SHA256
+
+scheme: RC6/CCM/NoPadding
+keytype: RC6-256
+integrity-check: HMAC-SHA256
+
+scheme: RC6/GCM/NoPadding
+keytype: RC6-128
+integrity-check: HMAC-SHA256
+
+scheme: RC6/CTR/NoPadding
+keytype: RC6-256
+integrity-check: HMAC-SHA256
+
+scheme: CHACHA20
+keytype: CHACHA20-128
+integrity-check: HMAC-SHA256
+
 scheme: AES/CCM/NoPadding
 keytype: AES-256
 integrity-check: HMAC-SHA256
