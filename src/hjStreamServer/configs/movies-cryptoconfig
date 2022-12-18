@@ -12,6 +12,6 @@ ciphersuite: RC6/CTR/NoPadding
 key: 476e67a34e5571897612391bcce24512
 iv: 8a451982e562c4877771565261abc129
 integrity: HMAC-SHA1
-integrity-check: 143605980370c6554902370b4fb8e05ba0eb51f4
+integrity-check: 7290bd13488321195cf729642dd60e12f94c3ca2
 mackey: 6af53417a7f5e4321a65a31213048567
 </monsters.dat.encrypted>

@@ -47,6 +47,10 @@ public class hjBox {
             System.err.println("Configuration file not found!");
             System.exit(1);
         }
+        if(args.length != 1) {
+            System.err.println("Usage: hjBox <movie-name>");
+            System.exit(1);
+        }
 
 
         Properties properties = new Properties();
@@ -63,7 +67,7 @@ public class hjBox {
         byte[] buffer = new byte[10096];
         Handshake handshake = Handshake.load("hjBox/configs/supported",
                 "hjBox/box.jks", PASSWORD);
-        handshake.sendHandshake(buffer, inSocket, "cars".getBytes());
+        handshake.sendHandshake(buffer, inSocket, args[0].getBytes());
         System.out.println("Handshake completed");
         CryptoStuff boxCrypto = handshake.getGeneratedCrypto();
         boxCrypto.printProperties();

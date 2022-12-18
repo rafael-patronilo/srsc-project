@@ -49,23 +49,30 @@ public class hjStreamServer {
 
         byte[] buffer = new byte[10096]; // can change if required
         InetSocketAddress addr =
-                new InetSocketAddress(args[1], Integer.parseInt(args[2]));
+                new InetSocketAddress(args[0], Integer.parseInt(args[1]));
         Handshake handshake = Handshake.load("hjStreamServer/configs/supported",
                 "hjStreamServer/server.jks", PASSWORD);
         DatagramSocket s = new DatagramSocket(addr);
-        handshake.listenForHandshake(buffer, s);
+        int movieLength =  handshake.listenForHandshake(buffer, s);
         System.out.println("Handshake completed");
         CryptoStuff boxCrypto = handshake.getGeneratedCrypto();
         boxCrypto.printProperties();
-        String[] moviePath = args[0].split("/");
-        movie = moviePath[moviePath.length - 1];
+        byte[] movieBytes = new byte[movieLength];
+        System.arraycopy(buffer, 0, movieBytes, 0, movieLength);
+        movie = new String(movieBytes);
+        String movieFilename = movie + ".dat.encrypted";
+        String moviePath = "hjStreamServer/movies/" + movieFilename;
+        System.out.println("Movie: " + movie);
+        System.out.println("Movie file: " + movieFilename);
+        System.out.println("Movie path: " + moviePath);
+
 
         //CryptoStuff boxCrypto = CryptoStuff.loadFromFile("hjStreamServer/configs/box-cryptoconfig", box);
         //boxCrypto.printProperties();
-        CryptoStuff movieCrypto = CryptoStuff.loadFromFile("hjStreamServer/configs/movies-cryptoconfig", movie);
+        CryptoStuff movieCrypto = CryptoStuff.loadFromFile("hjStreamServer/configs/movies-cryptoconfig", movieFilename);
         movieCrypto.printProperties();
 
-        byte[] movieData = movieCrypto.decryptFile(args[0]);
+        byte[] movieData = movieCrypto.decryptFile(moviePath);
 
         DataInputStream g =
                 new DataInputStream(new ByteArrayInputStream(movieData));
