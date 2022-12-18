@@ -1,13 +1,25 @@
 HANDSHAKE
 scheme: SHA256withRSA
+keytype: RSA
 integrity-check: NULL
 
 scheme: SHA256withRSA/PSS
+keytype: RSA
+integrity-check: NULL
+
+scheme: SHA256withDSA
+keytype: DSA
+integrity-check: NULL
+
+scheme: SHA256withECDSA
+keytype: ECDSA
 integrity-check: NULL
 
 SESSION
 scheme: AES/GCM/NoPadding
+keytype: AES-256
 integrity-check: HMAC-SHA256
 
 scheme: AES/CCM/NoPadding
+keytype: AES-256
 integrity-check: HMAC-SHA256

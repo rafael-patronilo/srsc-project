@@ -5,10 +5,13 @@ import java.util.Objects;
 
 public class Ciphersuite {
     private final String scheme;
+
+    private final String keyType;
     private final String integrityCheck;
 
-    public Ciphersuite(String algorithm, String scheme, String integrityCheck) {
+    public Ciphersuite(String scheme, String keyType, String integrityCheck) {
         this.scheme = scheme;
+        this.keyType = keyType;
         this.integrityCheck = integrityCheck;
     }
 
@@ -20,14 +23,17 @@ public class Ciphersuite {
         return integrityCheck;
     }
 
-    static Ciphersuite parseConfig(List<String> lines, int start) throws CryptoException{
-        String scheme = null, integrityCheck = null;
+    public String getKeyType() {
+        return keyType;
+    }
 
-        for (int i = start; i < start + 2; i++){
+    static Ciphersuite parseConfig(List<String> lines, int start) throws CryptoException{
+        String scheme = null, integrityCheck = null, keytype= null;
+
+        for (int i = start; i < start + 3; i++){
             if(i >= lines.size() || lines.get(i).isBlank())
                 break;
             String line = lines.get(i);
-            //System.out.println(line);
             String[] parts = line.split(":");
             parts[0] = parts[0].trim().toLowerCase();
             parts[1] = parts[1].trim();
@@ -36,6 +42,11 @@ public class Ciphersuite {
                     if (scheme != null)
                         throw new CryptoException("Invalid configuration: Repeated property " + parts[0]);
                     scheme = parts[1];
+                }
+                case "keytype" -> {
+                    if (keytype != null)
+                        throw new CryptoException("Invalid configuration: Repeated property " + parts[0]);
+                    keytype = parts[1];
                 }
                 case "integrity-check" -> {
                     if (integrityCheck != null)
@@ -49,16 +60,18 @@ public class Ciphersuite {
         if (scheme == null) {
             throw new CryptoException("Invalid configuration: Missing properties");
         }
+        if (keytype == null) {
+            throw new CryptoException("Invalid configuration: Missing properties");
+        }
         if (integrityCheck != null && integrityCheck.equalsIgnoreCase("null"))
             integrityCheck = null;
-        String algorithm = scheme.split("/")[0];
-        return new Ciphersuite(algorithm, scheme, integrityCheck);
+        return new Ciphersuite(scheme, keytype, integrityCheck);
     }
 
     @Override
     public String toString(){
-        return String.format("scheme:%s\nintegrity-check:%s\n",
-                scheme, integrityCheck == null ? "NULL" : integrityCheck);
+        return String.format("scheme:%s\nkeytype:%s\nintegrity-check:%s\n",
+                scheme, keyType, integrityCheck == null ? "NULL" : integrityCheck);
     }
 
     @Override

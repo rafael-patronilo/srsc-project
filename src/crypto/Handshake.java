@@ -216,8 +216,9 @@ public class Handshake {
         try{
             SecureRandom secureRandom = SecureRandom.getInstance("SHA1PRNG");
             secureRandom.setSeed(dhSecret);
-            KeyGenerator keyGenerator = KeyGenerator.getInstance(sessionCS.getScheme().split("/")[0]);
-            keyGenerator.init(secureRandom);
+            String[] keyType = sessionCS.getKeyType().split("-"); //AES-256
+            KeyGenerator keyGenerator = KeyGenerator.getInstance(keyType[0]);
+            keyGenerator.init(Integer.parseInt(keyType[1]), secureRandom);
             String key = bytesToHex(keyGenerator.generateKey().getEncoded());
             String macKey = null;
             if(isMac){
@@ -359,7 +360,7 @@ public class Handshake {
             }
             alias = scanner.next();
             scanner.nextLine();
-            if(!alias.equalsIgnoreCase(handshakeCS.getScheme().split("with")[1])) {
+            if(!alias.equalsIgnoreCase(handshakeCS.getKeyType())) {
                 line = scanner.nextLine();
                 while (!line.trim().equalsIgnoreCase(CERTIFICATE_TAIL)) {
                     line = scanner.nextLine();
@@ -504,7 +505,7 @@ public class Handshake {
 
         appendField(builder, EXCHANGE_FIELD, CryptoStuff.bytesToHex(dhPublic.getEncoded()));
 
-        String alias = handshakeCS.getScheme().split("with")[1].toLowerCase();
+        String alias = handshakeCS.getKeyType().toLowerCase();
         builder.append(CERTIFICATE_HEADER).append(" ").append(alias).append("\n");
         appendCertificates(builder, myCertificates.get(alias));
         builder.append(CERTIFICATE_TAIL).append("\n");
